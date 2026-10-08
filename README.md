@@ -59,3 +59,9 @@ python body_test.py && python decide_test.py && python ratings_test.py
 | `ratings.py` | 評価の記録と集計（純関数） |
 | `persona.example.py` | 人格の見本 |
 | `*_test.py` | 純関数のテスト |
+
+## ライセンス
+
+[PolyForm Noncommercial License 1.0.0](LICENSE.md)。**商用利用はできません。**個人の学習・研究・趣味での利用、改変、再配布は、ライセンスの条件の範囲でできます。
+
+Required Notice: Copyright 2026 Ponzu
