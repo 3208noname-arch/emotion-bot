@@ -192,6 +192,18 @@ def defer_due(deferred, t, state):
     return [], alive[-1]
 
 
+def ago(sec):
+    """発言からの経過を言葉にする（LLMに時刻の差を計算させない）。"""
+    m = int(sec // 60)
+    if m < 1:
+        return "今"
+    if m < 60:
+        return f"{m}分前"
+    if m < 60 * 24:
+        return f"{m // 60}時間前"
+    return f"{m // (60 * 24)}日前"
+
+
 def typing_sec(text, device="PC"):
     """打っている時間。**スマホはPCより遅い**（フリック入力）。"""
     if device == "スマホ":

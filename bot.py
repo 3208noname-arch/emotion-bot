@@ -6,7 +6,7 @@
 - **安全装置**: 1人あたり／全体の1日上限、オーナーの停止コマンド（!minato stop / start / status）
 - 体の変数（body.py）が寝る・食べる・抜けるを決める。人格と呼ばれ方は persona.py に置く
 """
-__version__ = "minato 0.5.0"
+__version__ = "minato 0.5.1"
 
 import asyncio
 import json
@@ -136,9 +136,19 @@ def parse(text, kind, target_text=""):
 KIND_LABEL = {"reaction": "リアクション", "short": "一言", "normal": "通常"}
 
 
+def line(m, t):
+    """会話の1行。いつの発言かを先頭に付ける（時刻が無いと、昨日の話と今の話の区別が付かない）。"""
+    sec = (t - datetime.fromisoformat(m["at"])).total_seconds() if m.get("at") else 0
+    return f"［{decide.ago(sec)}］{m['author']}: {m['text']}"
+
+
 async def write(recent, target, kind, pres, note=None, body_text=None, guide=""):
-    log_lines = "\n".join(f"{m['author']}: {m['text']}" for m in recent)
-    turn = (f"【直近の会話】\n{log_lines}\n\n【返信先】\n{target['author']}: {target['text']}\n\n"
+    """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。"""
+    t = now()
+    log_lines = "\n".join(line(m, t) for m in recent)
+    to = (f"【返信先】\n{line(target, t)}" if target else
+          "【返信先】なし。誰かの発言への返事ではない。直近の会話に答えたり、自分の発言を繰り返したりしない")
+    turn = (f"【今の時刻】{t:%H:%M}\n【直近の会話】\n{log_lines}\n\n{to}\n\n"
             f"【型】{KIND_LABEL[kind]}\n【今の様子】{pres}\n"
             f"【呼ばれ方】このサーバーでのあなたの表示名は {persona.NICK}。会話の中でそう呼ばれたら自分のこと")
     if body_text:
@@ -147,7 +157,8 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="")
         turn += "\n【補足】" + note
     if kind == "reaction":
         turn += "\n【絵文字の候補】" + " ".join(persona.REACTIONS)
-    if asks_ai(target["text"]):
+    target_text = target["text"] if target else ""
+    if asks_ai(target_text):
         turn += ("\n【注意】返信先は、あなたがAIかどうかを聞いている。**人間だと言ってはいけない**（嘘になる）。"
                  "「どうだろね」「当ててみ」のようにはぐらかすか、軽く認める。話をそらして否定もしない")
     messages = [{"role": "system", "content": persona.PERSONA + persona.INSTR + guide},
@@ -156,7 +167,7 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="")
         text = await _post(messages)
         if not text:
             return None
-        out = parse(text, kind, target["text"])
+        out = parse(text, kind, target_text)
         if out:
             return out
         log.info("型・口調が合わない。引き直す: %r", text[:80])
@@ -203,6 +214,7 @@ ANNOUNCE = {"寝た": "眠気が限界なので、今から寝る。会話から
             "コンビニに行く": "腹が減ったので、今からコンビニに行く。一言だけ",
             "戻った": "コンビニから戻った／少し休んで戻った。一言だけ"}
 ACTIVE_WINDOW = timedelta(minutes=20)   # この間に人が話していれば、抜ける・戻る時に一言添える
+ANNOUNCE_GAP = timedelta(minutes=3)     # 自分がこの間に喋っていたら、抜ける・戻る一言は省く（直前の返事をなぞるため）
 
 
 # --- Discord -----------------------------------------------------------------
@@ -254,7 +266,8 @@ class Minato(discord.Client):
         return " ".join(parts)[:400]
 
     def entry(self, m):
-        return {"id": m.id, "author": m.author.display_name, "author_id": m.author.id,
+        return {"id": m.id, "at": m.created_at.astimezone(JST).replace(tzinfo=None).isoformat(timespec="seconds"),
+                "author": m.author.display_name, "author_id": m.author.id,
                 "bot": m.author.bot, "text": self.describe(m),
                 "to_me": bool(m.reference and m.reference.resolved
                               and getattr(m.reference.resolved, "author", None) == self.user)}
@@ -298,6 +311,8 @@ class Minato(discord.Client):
         if m.content.startswith("!minato"):
             if str(m.author.id) == str(CONFIG["owner_id"]):
                 await self.owner_command(m)
+            return
+        if m.flags.ephemeral or m.interaction_metadata:   # 評価の確認など、本人にしか見えない応答は会話ではない
             return
         e = self.entry(m)
         self.recent.append(e)
@@ -443,7 +458,10 @@ class Minato(discord.Client):
         last = discord.utils.snowflake_time(humans[-1]["id"]).astimezone(JST).replace(tzinfo=None)
         if t - last > ACTIVE_WINDOW:
             return
-        out = await write(list(self.recent), humans[-1], "short", decide.activity(t, b)["label"],
+        if self.last_sent_at and t - self.last_sent_at < ANNOUNCE_GAP:
+            log.info("体の都合（%s）: 直前に喋ったので一言は省く", say[0])
+            return
+        out = await write(list(self.recent), None, "short", decide.activity(t, b)["label"],
                           ANNOUNCE[say[0]], body_text=body.as_feelings(b, t))
         if out:
             log.info("体の都合で一言（%s）→ %s", say[0], out[0])
