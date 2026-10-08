@@ -204,6 +204,22 @@ def ago(sec):
     return f"{m // (60 * 24)}日前"
 
 
+LATE_WHY = {"寝ている": "寝てた", "バイト中": "バイト中だった",
+            "コンビニ": "コンビニ行ってた", "一人になりたい": "ちょっと離れてた"}
+LATE_EXCUSE_MIN = 10   # これより短い遅れは、人間でもいちいち断らない
+
+
+def late_note(mins, was, why=None):
+    """後で返す時の補足。周りは離席を知らないので「今見た」ではなく理由を短く言う。"""
+    head = f"この発言は約{mins}分前のもの。"
+    if mins < LATE_EXCUSE_MIN:
+        return head + "遅れたことには触れず、普通に返す"
+    reason = LATE_WHY.get(why) or LATE_WHY.get(was, "ちょっと離れてた")
+    return (head + f"あなたは見ていなかった（{reason}）。周りはそれを知らない。"
+            f"「今見た」だけで済ませず、1通目の頭で理由を数文字だけ言う（例:「{reason}」）。"
+            "言い訳を2通に分けない。謝りすぎない")
+
+
 def typing_sec(text, device="PC"):
     """打っている時間。**スマホはPCより遅い**（フリック入力）。"""
     if device == "スマホ":

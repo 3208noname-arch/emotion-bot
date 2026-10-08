@@ -6,7 +6,7 @@
 - **安全装置**: 1人あたり／全体の1日上限、オーナーの停止コマンド（!minato stop / start / status）
 - 体の変数（body.py）が寝る・食べる・抜けるを決める。人格と呼ばれ方は persona.py に置く
 """
-__version__ = "minato 0.5.1"
+__version__ = "minato 0.5.2"
 
 import asyncio
 import json
@@ -112,6 +112,10 @@ HUMAN_CLAIM = re.compile(r"人間(だ|です|やで)|普通にいる|AIじゃな
                          re.I)
 
 
+# 自分を名前で呼ぶ（「凪のこと」「ナギは」）。三人称はキャラに合わない
+SELF_NAME = re.compile(f"(?:{persona.NAMES.pattern})(?:のこと|は|が|も|的に)", re.I)
+
+
 def asks_ai(text):
     return bool(AI_Q.search(text))
 
@@ -126,7 +130,7 @@ def parse(text, kind, target_text=""):
         e = obj.get("reaction")
         return e if e in persona.REACTIONS else None
     msgs = [m.strip() for m in obj.get("messages") or [] if isinstance(m, str) and m.strip()]
-    if not msgs or any(POLITE.search(m) for m in msgs):
+    if not msgs or any(POLITE.search(m) or SELF_NAME.search(m) for m in msgs):
         return None
     if asks_ai(target_text) and any(HUMAN_CLAIM.search(m) for m in msgs):
         return None   # 人間だと偽らない（このサーバーではAIが混ざっていると告知している）
@@ -369,7 +373,8 @@ class Minato(discord.Client):
         log.info("判断: 宛先=%s 関心=%s シェア=%.2f 人数=%d 様子=%s → %s", addressed,
                  None if interest is None else round(interest, 2), share, humans, act["state"], kind)
         if kind == "defer":
-            self.s.setdefault("deferred", []).append({**target, "at": t.isoformat(), "was": act["state"]})
+            self.s.setdefault("deferred", []).append({**target, "at": t.isoformat(), "was": act["state"],
+                                                       "why": self.body.get("away_why")})
             self.s["deferred"] = self.s["deferred"][-5:]
             save_state(self.s)
             return None
@@ -430,10 +435,8 @@ class Minato(discord.Client):
                     if not due:
                         continue
                     mins = int((t - datetime.fromisoformat(due["at"])).total_seconds() // 60)
-                    why = {"寝ている": "寝ていた", "バイト中": "バイト中だった"}.get(due["was"], "見ていなかった")
-                    note = (f"この発言は約{mins}分前のもの。あなたは{why}ので今やっと見た。"
-                            "遅れたことに軽く触れてから返す（言い訳を長くしない）")
-                    log.info("後で返す: %s（%d分前・%s）", due["text"][:40], mins, why)
+                    note = decide.late_note(mins, due["was"], due.get("why"))
+                    log.info("後で返す: %s（%d分前・%s）", due["text"][:40], mins, due.get("why") or due["was"])
                     await self.reply({"target": due, "addressed": True, "kind": "normal",
                                       "act": act, "at": t}, note)
             except Exception:

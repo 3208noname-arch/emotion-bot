@@ -97,6 +97,12 @@ eq(D.schedule(TUE.replace(hour=20)), "バイト中", "予定だけの判定")
 eq(D.alarm(MON)[0], True, "月曜は目覚まし")
 eq(D.alarm(TUE)[0], False, "火曜は目覚ましなし")
 
+# 遅れて返す時の補足
+eq("触れず" in D.late_note(5, "離席中", "コンビニ"), True, "短い遅れは断らない")
+eq("コンビニ行ってた" in D.late_note(25, "離席中", "コンビニ"), True, "離席は理由を言う")
+eq("バイト中だった" in D.late_note(120, "バイト中"), True, "バイトは状態から")
+eq("ちょっと離れてた" in D.late_note(30, "離席中"), True, "理由が無ければぼかす")
+
 # 経過時間
 eq(D.ago(30), "今", "1分未満は今")
 eq(D.ago(5 * 60 + 59), "5分前", "分は切り捨て")
