@@ -1,0 +1,8 @@
+config.json
+persona.py
+state.json
+state.json.*
+ratings.jsonl
+*.bak*
+__pycache__/
+.env

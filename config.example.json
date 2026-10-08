@@ -1,0 +1,7 @@
+{
+  "token": "Discord Bot のトークン",
+  "channel_id": "話すチャンネルのID",
+  "owner_id": "!minato コマンドを使える人のユーザーID",
+  "typesafe_key": "TypeSafe（Jev）のAPIキー",
+  "openrouter_key": "OpenRouter のAPIキー"
+}
