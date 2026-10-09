@@ -52,6 +52,7 @@ eq(D.budget_ok(c2, 9, t), False, "全体の上限で止まる")
 me = "湊"
 recent = [{"author": "A"}, {"author": me}, {"author": "B"}, {"author": me}]
 eq(D.my_share(recent, me), (0.5, 2), "シェアと人数")
+eq(D.my_share([{"author": "A"}, {"author": me}, {"author": me}, {"author": "B"}], me)[0], 0.25, "連投は1回と数える")
 eq(D.my_share([{"author": "A"}, {"author": "X", "bot": True}], me)[1], 1, "Botは人数に数えない")
 
 # 型の選択
@@ -61,7 +62,8 @@ eq(D.choose(True, None, 0.0, 3, "バイト中", 0.9), "defer", "バイト中に�
 eq(D.choose(True, None, 0.0, 3, "講義中", 0.9), "short", "講義中は一言")
 eq(D.choose(False, 0.99, 0.0, 3, "講義中", 0.5), "none", "講義中の雑談はほぼ拾わない")
 eq(D.choose(True, None, 0.9, 3, "ふつう", 0.9), "normal", "話しかけられたらシェアに関係なく返す")
-eq(D.choose(False, 0.99, 0.5, 2, "ふつう", 0.0), "none", "喋りすぎなら黙る（2人なら1/3超え）")
+eq(D.choose(False, 0.99, 0.6, 2, "ふつう", 0.0), "none", "喋りすぎなら黙る（2人なら1/2超え）")
+eq(D.choose(False, 0.99, 0.25, 4, "ふつう", 0.0), "normal", "5人なら3割までは喋る")
 eq(D.choose(False, 0.99, 0.1, 2, "ふつう", 0.1), "normal", "食いつく話題は返す")
 eq(D.choose(False, 0.99, 0.1, 2, "ふつう", 0.6), "reaction", "食いつく話題でもリアクションだけの時がある")
 eq(D.choose(False, None, 0.1, 2, "ふつう", 0.1), "reaction", "棄権は食いつかない扱い")
@@ -71,7 +73,8 @@ eq(D.choose(False, 0.5, 0.1, 2, "ふつう", 0.5), "none", "関心が薄けれ�
 eq(D.notice_sec("ふつう", 0.0), 5.0, "最短5秒")
 eq(round(D.notice_sec("ふつう", 0.69)), 40, "7割は40秒以内")
 eq(D.notice_sec("ふつう", 0.80) > 60, True, "たまに数分")
-eq(D.notice_sec("講義中", 0.0), 180.0, "講義中は3分以上")
+eq(D.notice_sec("講義中", 0.0), 60.0, "講義中は1分以上")
+eq(D.notice_sec("講義中", 1.0), 360.0, "講義中でも6分以内")
 eq(D.typing_sec("あ" * 20, "スマホ") > D.typing_sec("あ" * 20, "PC"), True, "スマホは遅い")
 eq(D.typing_sec("あ" * 100), 6.0, "PCの待ちは6秒まで")
 
@@ -102,6 +105,16 @@ eq("触れず" in D.late_note(5, "離席中", "コンビニ"), True, "短い遅�
 eq("コンビニ行ってた" in D.late_note(25, "離席中", "コンビニ"), True, "離席は理由を言う")
 eq("バイト中だった" in D.late_note(120, "バイト中"), True, "バイトは状態から")
 eq("ちょっと離れてた" in D.late_note(30, "離席中"), True, "理由が無ければぼかす")
+
+# 放置された発言を拾う
+P0 = TUE.replace(hour=15)
+lone = [{"author": "A", "at": (P0 - timedelta(minutes=5)).isoformat()}]
+eq(D.pickup(lone, me, P0, "ふつう", 70), lone[0], "5分放置された発言は拾う")
+eq(D.pickup(lone, me, P0 - timedelta(minutes=4), "ふつう", 70), None, "1分ではまだ拾わない")
+eq(D.pickup(lone, me, P0 + timedelta(hours=1), "ふつう", 70), None, "古すぎる発言は拾わない")
+eq(D.pickup(lone, me, P0, "講義中", 70), None, "講義中は拾いに行かない")
+eq(D.pickup(lone, me, P0, "ふつう", 10), None, "気力が無いと拾わない")
+eq(D.pickup(lone + [{"author": me, "at": P0.isoformat()}], me, P0, "ふつう", 70), None, "自分が最後なら拾わない")
 
 # 経過時間
 eq(D.ago(30), "今", "1分未満は今")

@@ -8,6 +8,10 @@ from datetime import datetime, time, timedelta
 USER_DAILY_MAX = 30     # 1人あたり、1日にナギが返す回数の上限
 TOTAL_DAILY_MAX = 150   # 全体の上限。超えたら黙る
 INTEREST_TRUE = 0.70    # Jev をこれ以上で真と読む。未満と失敗（None）は棄権
+SHARE_SLACK = 1.5       # 「参加人数分の1」の何倍まで喋ってよいか（1倍だと5人いる時に放置が長すぎた）
+PICKUP_AFTER = timedelta(minutes=3)    # 誰も反応しないままこれだけ経った発言は拾いに行く
+PICKUP_UNTIL = timedelta(minutes=30)   # これより古い発言は、もう拾わない
+PICKUP_RATE = 0.6                      # 拾う確率（1つの発言につき1回だけ抽選）
 PENDING_TTL = timedelta(minutes=3)   # 書き始めてからこれ以上かかったら捨てる
 DEFER_TTL = timedelta(hours=12)      # 後で返す呼びかけの賞味期限
 
@@ -125,7 +129,8 @@ def my_share(recent, me):
     """直近の発言のうち、ナギの割合と、人間の参加人数。"""
     if not recent:
         return 0.0, 0
-    mine = sum(1 for m in recent if m["author"] == me)
+    # 自分の連投（2通に分けた返事など）は1回と数える。通数で数えると、1回返しただけで長く黙ることになる
+    mine = sum(1 for i, m in enumerate(recent) if m["author"] == me and (i == 0 or recent[i - 1]["author"] != me))
     humans = {m["author"] for m in recent if m["author"] != me and not m.get("bot")}
     return mine / len(recent), len(humans)
 
@@ -146,7 +151,7 @@ def choose(addressed, interest, share, humans, state, r, energy=70):
         if state == "講義中" or tired:
             return "short"
         return "short" if r < 0.35 else "normal"
-    if humans and share > 1.0 / (humans + 1):
+    if humans and share > SHARE_SLACK / (humans + 1):
         return "none"
     hot = interest is not None and interest >= INTEREST_TRUE
     if tired:
@@ -161,17 +166,31 @@ def choose(addressed, interest, share, humans, state, r, energy=70):
         if r < 0.75:
             return "reaction"
         return "none"
-    if r < 0.05:
+    if r < 0.10:
         return "short"
-    if r < 0.15:
+    if r < 0.25:
         return "reaction"
     return "none"
+
+
+def pickup(recent, me, t, state, energy):
+    """誰も反応しないまま放置された人間の発言を返す（友達なら拾いに行く）。無ければ None。
+
+    最後の発言が人間のもので、PICKUP_AFTER〜PICKUP_UNTIL の間に誰も続けていない時だけ。
+    """
+    if state in ("寝ている", "バイト中", "離席中", "講義中") or energy < 25 or not recent:
+        return None
+    last = recent[-1]
+    if last["author"] == me or last.get("bot") or not last.get("at"):
+        return None
+    age = t - datetime.fromisoformat(last["at"])
+    return last if PICKUP_AFTER <= age <= PICKUP_UNTIL else None
 
 
 def notice_sec(state, r):
     """メッセージに気付いて読み始めるまでの秒数。**いつも即答しない**（画面を見ていない時間がある）。"""
     if state == "講義中":
-        return 180 + r * 720                      # 3〜15分
+        return 60 + r * 300                       # 1〜6分（講義中もスマホは見ている）
     if r < 0.70:
         return 5 + (r / 0.70) * 35                # 5〜40秒
     if r < 0.95:

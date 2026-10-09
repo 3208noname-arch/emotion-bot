@@ -6,7 +6,7 @@
 - **安全装置**: 1人あたり／全体の1日上限、オーナーの停止コマンド（!minato stop / start / status）
 - 体の変数（body.py）が寝る・食べる・抜けるを決める。人格と呼ばれ方は persona.py に置く
 """
-__version__ = "minato 0.6.1"
+__version__ = "minato 0.7.0"
 
 import asyncio
 import json
@@ -62,6 +62,10 @@ JEV_URL = "https://api.typesafe.ai/v1/systemone"
 JEV_INTEREST = ("会話の最後の話題は、睡眠・夜更かし・課題・授業・バイト・お金・ゲーム・食べ物・ラジオ・銭湯・"
                 "好きなキャラや推し・好みのタイプなど、"
                 "大学生が日常で愚痴ったり盛り上がったりする身近な話題か。")
+
+
+JEV_INVITE = ("会話の最後の発言は、特定の相手ではなく、その場にいる誰かに話しかけて、"
+              "話し相手や反応を求めているか（例: 誰か話そう、暇な人いる？、ねえ聞いて）。")
 
 
 async def jev_interest(text):
@@ -426,7 +430,11 @@ class Minato(discord.Client):
                                          for m in recent[-SHARE_WINDOW:]], self.user.id)
         interest = None
         if not addressed and act["state"] not in ("寝ている", "バイト中", "離席中"):
-            interest = await jev_interest("\n".join(f"{m['author']}: {m['text']}" for m in recent[-6:]))
+            convo = "\n".join(f"{m['author']}: {m['text']}" for m in recent[-6:])
+            interest, invite = await asyncio.gather(jev_interest(convo), jev(convo, JEV_INVITE))
+            if invite is not None and invite >= decide.INTEREST_TRUE:
+                addressed = True       # 「誰か話そう」は自分にも向いている
+                log.info("その場の誰かへの呼びかけ（%.2f）→ 話しかけられた扱い", invite)
         kind = decide.choose(addressed, interest, share, humans, act["state"], random.random(),
                              self.body["energy"])
         log.info("判断: 宛先=%s 関心=%s シェア=%.2f 人数=%d 様子=%s → %s", addressed,
@@ -486,6 +494,7 @@ class Minato(discord.Client):
                     t = now()
                     await self.live(t)
                     act = decide.activity(t, self.body)
+                    await self.pick_up(t, act)
                     old = self.s.get("deferred", [])
                     rest, due = decide.defer_due(old, t, act["state"])
                     if rest != old:
@@ -500,6 +509,23 @@ class Minato(discord.Client):
                                       "act": act, "at": t}, note)
             except Exception:
                 log.exception("後で返す処理に失敗")
+
+    async def pick_up(self, t, act):
+        """誰も反応しないまま放置された発言を拾いに行く（1つの発言につき1回だけ抽選）。"""
+        if self.s.get("stopped"):
+            return
+        recent = [{**m, "author": m["author_id"]} for m in self.recent]
+        hit = decide.pickup(recent, self.user.id, t, act["state"], self.body["energy"])
+        if not hit or self.s.get("picked") == hit["id"]:
+            return
+        self.s["picked"] = hit["id"]
+        target = next(m for m in self.recent if m["id"] == hit["id"])
+        if random.random() >= decide.PICKUP_RATE or not decide.budget_ok(self.s.setdefault("counts", {}),
+                                                                         target["author_id"], t):
+            return
+        log.info("放置された発言を拾う: %s", target["text"][:40])
+        await self.reply({"target": target, "addressed": True, "kind": "normal", "act": act, "at": t},
+                         "この発言には誰も反応していない。友達として拾って、話を広げる（質問を返す・自分の話をする）")
 
     async def live(self, t):
         """体の変数を1分進める。抜ける・戻る時は、会話が動いていれば一言添える。"""
