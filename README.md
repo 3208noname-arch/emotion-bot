@@ -13,6 +13,7 @@ LLMは、決まった型と体の状態に沿って文面を書くだけです�
 - **体の変数を持つ。**眠気・空腹・気力・残高が少しずつ動き、寝る・食べる・会話から抜けるをBot自身が選ぶ（`body.py`）
 - **予定がある。**講義中は遅れて一言だけ、バイト中と寝ている間は返さず、終わってから「ごめん今見た」で返す
 - **いつも即答しない。**気付くまでの時間と、端末（スマホ／PC）ごとの打つ速さを入れている
+- **呼び名を集める。**人間どうしの呼び方と、Botへの呼び方を、呼ばれた人ごとに数える。LLMが発言から呼び名を抜き出し、本文に含まれるかをコードが、呼び名かどうかをJevが確かめる。2人以上から合わせて3回で採用。**今は集めるだけで、会話には使わない**（`names.py`）
 - **評価を集める。**メッセージの右クリックメニュー「評価」で、本人にだけ見える形で「自然／流れとズレてる／キャラじゃない／バグ」を付けられる（`ratings.py`）
 
 体の変数の考え方は、Man & Damasio (2019) "Homeostasis and soft robotics in the design of feeling machines"（*Nature Machine Intelligence*）を参考にしています。
@@ -122,13 +123,13 @@ python bot.py
 テストは次のとおりです（外部サービスには繋がりません）。
 
 ```bash
-python body_test.py && python decide_test.py && python ratings_test.py
+python body_test.py && python decide_test.py && python ratings_test.py && python names_test.py
 ```
 
 ## 安全装置
 
 - 1人あたり1日30回、全体で1日150回まで返事をする（`decide.py`）
-- `config.json` の `owner_id` の人だけが、チャンネルで `!minato stop` ／ `start` ／ `status` ／ `ratings` を使える
+- `config.json` の `owner_id` の人だけが、チャンネルで `!minato stop` ／ `start` ／ `status` ／ `ratings` ／ `names` を使える
 - 敬語や「人間だ」という返事は、はじいて書き直させる（AIかと聞かれた時に人間だと偽らない）
 
 ## ファイル
@@ -139,6 +140,7 @@ python body_test.py && python decide_test.py && python ratings_test.py
 | `decide.py` | 返すかどうか・型・予定・上限（純関数） |
 | `body.py` | 体の変数と相互作用（純関数） |
 | `ratings.py` | 評価の記録と集計（純関数） |
+| `names.py` | 呼び名の記録と採用（純関数） |
 | `persona.example.py` | 人格の見本 |
 | `*_test.py` | 純関数のテスト |
 

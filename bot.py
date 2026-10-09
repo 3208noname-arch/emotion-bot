@@ -6,7 +6,7 @@
 - **安全装置**: 1人あたり／全体の1日上限、オーナーの停止コマンド（!minato stop / start / status）
 - 体の変数（body.py）が寝る・食べる・抜けるを決める。人格と呼ばれ方は persona.py に置く
 """
-__version__ = "minato 0.5.3"
+__version__ = "minato 0.6.0"
 
 import asyncio
 import json
@@ -22,6 +22,7 @@ import discord
 
 import body
 import decide
+import names
 import persona
 import ratings
 
@@ -64,12 +65,16 @@ JEV_INTEREST = ("会話の最後の話題は、睡眠・夜更かし・課題・
 
 
 async def jev_interest(text):
+    return await jev(text, JEV_INTEREST)
+
+
+async def jev(text, question):
     """確率。**失敗は None（棄権）で、偽ではない。**"""
     key = CONFIG.get("typesafe_key")
     if not key:
         return None
     body = {"state": text, "model": "jev-latest",
-            "questions": {"interest": {"type": "noul", "instructions": JEV_INTEREST}}}
+            "questions": {"interest": {"type": "noul", "instructions": question}}}
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as sess:
             async with sess.post(JEV_URL, json=body, headers={"Authorization": "Bearer " + key}) as r:
@@ -90,8 +95,8 @@ TRIES = 3
 POLITE = re.compile(r"(です|ます|ました|ません|でした|ください|でしょう)[ねよかがけど]?(?=[。！？!?…、~〜\s]|$)")
 
 
-async def _post(messages):
-    payload = {"messages": messages, "temperature": 1.0, "reasoning": {"enabled": False},
+async def _post(messages, temperature=1.0):
+    payload = {"messages": messages, "temperature": temperature, "reasoning": {"enabled": False},
                "response_format": {"type": "json_object"}}
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=40)) as sess:
         for model in OR_MODELS:
@@ -176,6 +181,27 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="")
             return out
         log.info("型・口調が合わない。引き直す: %r", text[:80])
     return None   # 全滅なら黙る（定型で埋めない。黙っても不自然ではない）
+
+
+# --- 呼び名を集める（集めるだけ。会話にはまだ使わない） ---------------------------
+NAME_PICK = ("Discordのグループチャットの発言を1つ渡す。発言者が【相手】を呼んだり指したりしている呼び名"
+             "（名前・あだ名）を、発言の中の表記のまま1つ抜き出す。呼んでいなければ null。"
+             '出力はJSONで {"name": "呼び名"} か {"name": null}')
+
+
+async def pick_name(text, display):
+    """LLMが候補を抜き出し、本文に含まれるかをコードが、呼び名かどうかをJevが確かめる。"""
+    raw = await _post([{"role": "system", "content": NAME_PICK},
+                       {"role": "user", "content": f"【相手】{display}\n【発言】{text}"}], temperature=0)
+    try:
+        form = names.clean(json.loads(raw or "{}").get("name"))
+    except (ValueError, AttributeError):
+        return None
+    if not names.valid(form, text):
+        return None
+    p = await jev(f"【相手】{display}（この発言の返信先・メンション先）\n【発言】{text}",
+                  f"発言者は【相手】のことを「{form}」という呼び名で呼んだり指したりしているか。")
+    return form if p is not None and p >= decide.INTEREST_TRUE else None
 
 
 # --- 評価（右クリックメニュー。本人にしか見えない） -------------------------------
@@ -295,6 +321,10 @@ class Minato(discord.Client):
 
     async def owner_command(self, m):
         cmd = m.content.split()[1] if len(m.content.split()) > 1 else "status"
+        if cmd == "names":
+            await m.reply("-# " + names.format_summary(self.s.get("names", {}), self.user.id)
+                          .replace("\n", "\n-# "), mention_author=False)
+            return
         if cmd == "ratings":
             await m.reply("-# " + ratings.format_summary(ratings.summary(ratings.load(RATINGS_PATH)))
                           .replace("\n", "\n-# "), mention_author=False)
@@ -323,10 +353,35 @@ class Minato(discord.Client):
         if m.author.bot:          # 自分と他のBotには反応しない
             return
         e["mentions_me"] = self.user in m.mentions or bool(persona.NAMES.search(m.content))
+        asyncio.create_task(self.learn_name(m))
         self.batch.append(e)
         self.last_at = now()
         if self.batch_task is None or self.batch_task.done():
             self.batch_task = asyncio.create_task(self.wait_and_decide(now()))
+
+    async def learn_name(self, m):
+        """誰かを呼んでいる発言から、その人の呼び名を拾う（人間どうし・ナギへの両方）。"""
+        try:
+            ref = m.reference.resolved if m.reference else None
+            target = (ref.author if isinstance(ref, discord.Message) else
+                      next((u for u in m.mentions if u != m.author), None))
+            hit = persona.NAMES.search(m.content)
+            if hit and target in (None, self.user):
+                form = names.clean(hit.group())          # ナギの名前は正規表現で確実に取れる
+                target = self.user
+            elif target is None or target == m.author or (target.bot and target != self.user):
+                return
+            else:
+                display = getattr(target, "display_name", target.name)
+                form = await pick_name(m.clean_content, display)
+            if not form:
+                return
+            display = self.ch.guild.me.display_name if target == self.user else target.display_name
+            names.record(self.s.setdefault("names", {}), target.id, display, form, m.author.id, now())
+            save_state(self.s)
+            log.info("呼び名: %s → %s「%s」", m.author.display_name, display, form)
+        except Exception:
+            log.exception("呼び名の読み取りに失敗")
 
     async def wait_and_decide(self, started):
         """最後の発言から QUIET_SEC 静かになるか、MAX_WAIT_SEC 経ったら、1回だけ判断する。
