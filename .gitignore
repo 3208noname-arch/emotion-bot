@@ -6,3 +6,4 @@ ratings.jsonl
 *.bak*
 __pycache__/
 .env
+topics.json

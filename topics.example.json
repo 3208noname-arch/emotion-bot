@@ -1,0 +1,29 @@
+{
+ "topics": [
+  {
+   "name": "ゲーム",
+   "valence": 0.6,
+   "arousal": 0.7,
+   "note": "例: 好きで食いつく"
+  },
+  {
+   "name": "事件・意外なニュース",
+   "valence": 0.1,
+   "arousal": 0.9,
+   "note": "例: 野次馬"
+  },
+  {
+   "name": "虫",
+   "valence": -0.8,
+   "arousal": 0.9,
+   "note": "例: 嫌いだが、とっさに反応する"
+  },
+  {
+   "name": "政治",
+   "valence": -0.1,
+   "arousal": 0.1,
+   "note": "例: どうでもいい"
+  }
+ ],
+ "updated": null
+}

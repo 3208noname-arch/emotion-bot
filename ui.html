@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ナギの様子</title>
+<style>
+:root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1b;--mute:#6b6b66;--line:#e2e2dd;--acc:#3a6ea5;--pos:#2f8f5b;--neg:#c2453d;--warn:#b7791f}
+@media (prefers-color-scheme:dark){:root{--bg:#161615;--card:#1f1f1d;--fg:#ececea;--mute:#9a9a94;--line:#33332f;--acc:#7aa7d9;--pos:#5cc08a;--neg:#e2776f;--warn:#e0a84a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
+header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 16px;z-index:2}
+h1{font-size:17px;margin:0 0 6px}
+nav{display:flex;gap:6px;overflow-x:auto}
+nav button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:4px 12px;font:inherit;white-space:nowrap;cursor:pointer}
+nav button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+main{max-width:960px;margin:0 auto;padding:16px}
+section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.k{color:var(--mute);font-size:13px}.v{font-size:22px;font-weight:600}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:4px}.bar i{display:block;height:100%;background:var(--acc)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--mute);font-weight:500}
+.pos{color:var(--pos)}.neg{color:var(--neg)}.mute{color:var(--mute)}
+input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 6px;width:100%}
+input[type=number]{width:72px}
+.btn{border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:6px;padding:6px 14px;font:inherit;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--acc)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+pre{white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.5;margin:0;max-height:70vh;overflow:auto}
+svg text{fill:var(--mute);font-size:11px}
+.pt{cursor:grab}.pt text{fill:var(--fg);font-size:12px}
+details summary{cursor:pointer}
+#msg{min-height:1.4em}
+</style>
+</head>
+<body>
+<header>
+  <h1>ナギの様子 <span id="now" class="mute" style="font-size:13px;font-weight:400"></span></h1>
+  <nav id="tabs">
+    <button data-t="state" class="on">様子</button><button data-t="topics">話題の好き嫌い</button>
+    <button data-t="likes">好感度</button><button data-t="names">呼び名</button>
+    <button data-t="ratings">評価</button><button data-t="log">ログ</button>
+  </nav>
+</header>
+<main>
+<section id="state" class="on">
+  <div class="card"><div class="row"><div class="v" id="act"></div><span id="run" class="mute"></span></div>
+    <div class="mute" id="feel"></div></div>
+  <div class="grid card" id="bodyGrid"></div>
+  <div class="card"><div class="k">直近12時間の出来事（話題のネタ）</div><table id="events"></table></div>
+</section>
+
+<section id="topics">
+  <div class="card">
+    <div class="k">横が快（嫌い −1 〜 +1 好き）、縦が覚醒（心が動かない 0 〜 1 心が動く）。点はドラッグで動かせます。保存するまで反映されません。</div>
+    <svg id="plot" viewBox="0 0 640 400" style="width:100%;height:auto;touch-action:none"></svg>
+  </div>
+  <div class="card">
+    <table><thead><tr><th>話題</th><th>快</th><th>覚醒</th><th>メモ</th><th></th></tr></thead><tbody id="tbody"></tbody></table>
+    <div class="row" style="margin-top:10px">
+      <button class="btn ghost" id="add">＋ 話題を足す</button>
+      <button class="btn" id="saveTopics">保存</button>
+      <span id="msg" class="mute"></span>
+    </div>
+    <div class="mute" style="font-size:13px;margin-top:8px">ナギが実際にこの表を使い始めるのは、居心地の仕組みを入れてからです（今は表を育てる段階）。</div>
+  </div>
+</section>
+
+<section id="likes"><div class="card"><div class="k">好感度（−100〜+100、最初は+20）。名前を押すと出来事が出ます。今は数えるだけで、態度には効いていません。</div><div id="likeList"></div></div></section>
+<section id="names"><div class="card"><div class="k">集まった呼び名（2人以上から合わせて3回で採用）</div><table id="nameTable"></table></div></section>
+<section id="ratings"><div class="card"><pre id="rsum"></pre></div><div class="card"><table id="rtable"></table></div></section>
+<section id="log"><div class="card"><div class="row" style="margin-bottom:8px"><button class="btn ghost" id="reloadLog">再読み込み</button>
+  <input id="logFilter" placeholder="絞り込み（例: 判断 / 好感度 / 拾う）" style="max-width:320px"></div><pre id="logBox"></pre></div></section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const sign = v => (v > 0 ? "+" : "") + v;
+let topics = [], logLines = [];
+
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#tabs button, section").forEach(x => x.classList.remove("on"));
+  b.classList.add("on"); $("#" + b.dataset.t).classList.add("on");
+  if (b.dataset.t === "ratings") loadRatings();
+  if (b.dataset.t === "log") loadLog();
+});
+
+async function loadState() {
+  const s = await (await fetch("api/state")).json();
+  $("#now").textContent = s.now.replace("T", " ");
+  $("#act").textContent = s.activity;
+  $("#run").textContent = (s.stopped ? "停止中" : "稼働中") + `・${s.device}・今日 ${s.counts.total}/${s.counts.max} 回・自分から ${s.starts}/2・後で返す ${s.deferred} 件`;
+  const b = s.body;
+  $("#feel").textContent = b ? (b.feelings ? "体の感じ: " + b.feelings : "体の感じ: とくに無し") : "";
+  const meter = (k, v, max = 100) => `<div><div class="k">${k}</div><div class="v">${v}</div><div class="bar"><i style="width:${Math.max(0, Math.min(100, v / max * 100))}%"></i></div></div>`;
+  $("#bodyGrid").innerHTML = b ? meter("眠気（感じている）", b.felt_sleepy) + meter("空腹", b.hunger) + meter("気力", b.energy)
+    + `<div><div class="k">残高</div><div class="v">${b.money.toLocaleString()}円</div></div>` : "体の記録なし";
+  $("#events").innerHTML = s.events.length ? s.events.map(e => `<tr><td class="mute">${esc(e.at.slice(11, 16))}</td><td>${esc(e.what)}</td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
+  $("#likeList").innerHTML = s.likes.length ? s.likes.map(p => `<details class="card" style="margin:8px 0">
+      <summary><b>${esc(p.display)}</b> <span class="${p.v >= 15 ? "pos" : p.v <= -15 ? "neg" : ""}">${sign(p.v)}</span> <span class="mute">${esc(p.band)}</span></summary>
+      ${p.events.length ? "<table>" + p.events.map(e => `<tr><td class="mute">${esc(e.when)}</td><td>${esc(e.what)}</td><td class="${e.delta > 0 ? "pos" : "neg"}">${sign(e.delta)}</td><td>${esc(e.quote)}</td></tr>`).join("") + "</table>" : "<div class='mute'>出来事なし（話しかけの+1だけ）</div>"}
+    </details>`).join("") : "<div class='mute'>まだ無し</div>";
+  const n = Object.values(s.names);
+  $("#nameTable").innerHTML = n.length ? "<tr><th>呼ばれた人</th><th>呼び名（回数／人数）</th></tr>" + n.map(p => `<tr><td>${esc(p.display)}</td><td>${Object.entries(p.forms).sort((a, b) => b[1].n - a[1].n).map(([k, v]) => `${esc(k)} <span class="mute">${v.n}/${v.by.length}</span>`).join("、")}</td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
+}
+
+async function loadRatings() {
+  const r = await (await fetch("api/ratings")).json();
+  $("#rsum").textContent = r.summary;
+  $("#rtable").innerHTML = "<tr><th>時刻</th><th>評価</th><th>発言</th><th>コメント</th></tr>" + r.items.map(x => `<tr><td class="mute">${esc(x.at.slice(5, 16).replace("T", " "))}</td><td>${esc(x.label)}</td><td>${esc(x.author)}: ${esc(x.text)}</td><td>${esc(x.comment)}</td></tr>`).join("");
+}
+
+async function loadLog() {
+  logLines = (await (await fetch("api/log?n=400")).json()).lines;
+  showLog();
+}
+function showLog() {
+  const f = $("#logFilter").value.trim();
+  const lines = logLines.filter(l => !l.includes("RESUMED") && (!f || l.includes(f)))
+    .map(l => l.replace(/^\S+ \S+ python\[\d+\]: \S+ /, ""));
+  $("#logBox").textContent = lines.reverse().join("\n");
+}
+$("#reloadLog").onclick = loadLog; $("#logFilter").oninput = showLog;
+
+// --- 話題の座標 ---
+const W = 640, H = 400, P = 36;
+const sx = v => P + (v + 1) / 2 * (W - 2 * P), sy = a => H - P - a * (H - 2 * P);
+const vx = x => Math.max(-1, Math.min(1, (x - P) / (W - 2 * P) * 2 - 1)), ay = y => Math.max(0, Math.min(1, (H - P - y) / (H - 2 * P)));
+function drawPlot() {
+  const q = (x, y, t) => `<text x="${x}" y="${y}" text-anchor="middle">${t}</text>`;
+  let s = `<rect x="${P}" y="${P}" width="${W - 2 * P}" height="${H - 2 * P}" fill="none" stroke="currentColor" opacity=".15"/>
+    <line x1="${sx(0)}" y1="${P}" x2="${sx(0)}" y2="${H - P}" stroke="currentColor" opacity=".2"/>
+    <line x1="${P}" y1="${sy(.5)}" x2="${W - P}" y2="${sy(.5)}" stroke="currentColor" opacity=".1" stroke-dasharray="4 4"/>
+    ${q(sx(-.5), P - 10, "嫌い・心が動く（とっさに反応）")}${q(sx(.5), P - 10, "好き・心が動く（食いつく）")}
+    ${q(sx(-.5), H - 10, "嫌い・静か（うんざり）")}${q(sx(.5), H - 10, "好き・静か（和む）")}
+    ${q(P, H - P + 14, "−1")}${q(sx(0), H - P + 14, "0")}${q(W - P, H - P + 14, "+1")}`;
+  const placed = [];   // 近い点のラベルは下にずらして重ねない
+  topics.forEach((t, i) => {
+    const c = t.valence > 0.15 ? "var(--pos)" : t.valence < -0.15 ? "var(--neg)" : "var(--warn)";
+    const x = sx(t.valence), y = sy(t.arousal);
+    let dy = 4;
+    while (placed.some(([px, py]) => Math.abs(px - x) < 90 && Math.abs(py - (y + dy)) < 13)) dy += 14;
+    placed.push([x, y + dy]);
+    s += `<g class="pt" data-i="${i}" transform="translate(${x},${y})"><circle r="7" fill="${c}"/><text x="10" y="${dy}">${esc(t.name)}</text></g>`;
+  });
+  $("#plot").innerHTML = s;
+}
+function drawTable() {
+  $("#tbody").innerHTML = topics.map((t, i) => `<tr>
+    <td><input data-i="${i}" data-k="name" value="${esc(t.name)}"></td>
+    <td><input type="number" step="0.05" min="-1" max="1" data-i="${i}" data-k="valence" value="${t.valence}"></td>
+    <td><input type="number" step="0.05" min="0" max="1" data-i="${i}" data-k="arousal" value="${t.arousal}"></td>
+    <td><input data-i="${i}" data-k="note" value="${esc(t.note)}"></td>
+    <td><button class="btn ghost" data-del="${i}" title="消す">×</button></td></tr>`).join("");
+}
+function redraw() { drawPlot(); drawTable(); }
+$("#tbody").oninput = e => {
+  const el = e.target, i = +el.dataset.i, k = el.dataset.k;
+  if (k === undefined) return;
+  topics[i][k] = (k === "valence" || k === "arousal") ? +el.value : el.value;
+  drawPlot(); $("#msg").textContent = "未保存";
+};
+$("#tbody").onclick = e => {
+  if (e.target.dataset.del === undefined) return;
+  topics.splice(+e.target.dataset.del, 1); redraw(); $("#msg").textContent = "未保存";
+};
+$("#add").onclick = () => { topics.push({name: "新しい話題", valence: 0, arousal: 0.5, note: ""}); redraw(); $("#msg").textContent = "未保存"; };
+let drag = null;
+const svgPt = e => { const r = $("#plot").getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
+$("#plot").addEventListener("pointerdown", e => { const g = e.target.closest(".pt"); if (g) { drag = +g.dataset.i; $("#plot").setPointerCapture(e.pointerId); } });
+$("#plot").addEventListener("pointermove", e => {
+  if (drag === null) return;
+  const [x, y] = svgPt(e);
+  topics[drag].valence = Math.round(vx(x) * 20) / 20; topics[drag].arousal = Math.round(ay(y) * 20) / 20;
+  drawPlot();
+});
+$("#plot").addEventListener("pointerup", () => { if (drag !== null) { drag = null; drawTable(); $("#msg").textContent = "未保存"; } });
+$("#saveTopics").onclick = async () => {
+  const r = await fetch("api/topics", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({topics})});
+  const j = await r.json();
+  if (!r.ok) { $("#msg").textContent = "保存できない: " + j.error; return; }
+  topics = j.topics; redraw(); $("#msg").textContent = "保存した（" + j.updated.slice(11, 16) + "）";
+};
+async function loadTopics() { topics = (await (await fetch("api/topics")).json()).topics; redraw(); }
+
+loadState(); loadTopics(); setInterval(loadState, 30000);
+</script>
+</body>
+</html>
