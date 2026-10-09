@@ -15,6 +15,7 @@ LLMは、決まった型と体の状態に沿って文面を書くだけです�
 - **自分から話題を出す。**チャンネルが静かな時に、自分の生活の出来事から1日2回まで
 - **いつも即答しない。**気付くまでの時間と、端末（スマホ／PC）ごとの打つ速さを入れている
 - **呼び名を集める。**人間どうしの呼び方と、Botへの呼び方を、呼ばれた人ごとに数える。LLMが発言から呼び名を抜き出し、本文に含まれるかをコードが、呼び名かどうかをJevが確かめる。2人以上から合わせて3回で採用。**今は集めるだけで、会話には使わない**（`names.py`）
+- **好感度を数える。**人ごとに−100〜+100（最初は+20）。本気の悪口で下がり、いじりでは下がらず、庇われたり褒められたりすると上がる。Botが好きな相手をけなした人も下がる。1日±15まで、日ごとに0へ1割戻る。**今は数えるだけで、態度には使わない**（`affinity.py`）
 - **評価を集める。**メッセージの右クリックメニュー「評価」で、本人にだけ見える形で「自然／流れとズレてる／キャラじゃない／バグ」を付けられる（`ratings.py`）
 
 体の変数の考え方は、Man & Damasio (2019) "Homeostasis and soft robotics in the design of feeling machines"（*Nature Machine Intelligence*）を参考にしています。
@@ -136,7 +137,7 @@ python bot.py
 テストは次のとおりです（外部サービスには繋がりません）。
 
 ```bash
-python body_test.py && python decide_test.py && python ratings_test.py && python names_test.py
+python body_test.py && python decide_test.py && python ratings_test.py && python names_test.py && python affinity_test.py
 ```
 
 ## 安全装置
@@ -155,6 +156,7 @@ python body_test.py && python decide_test.py && python ratings_test.py && python
 | `body.py` | 体の変数と相互作用（純関数） |
 | `ratings.py` | 評価の記録と集計（純関数） |
 | `names.py` | 呼び名の記録と採用（純関数） |
+| `affinity.py` | 好感度の増減と出来事の記録（純関数） |
 | `persona.example.py` | 人格の見本 |
 | `*_test.py` | 純関数のテスト |
 

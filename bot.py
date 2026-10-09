@@ -6,7 +6,7 @@
 - **安全装置**: 1人あたり／全体の1日上限、オーナーの停止コマンド（!minato stop / start / status）
 - 体の変数（body.py）が寝る・食べる・抜けるを決める。人格と呼ばれ方は persona.py に置く
 """
-__version__ = "minato 0.8.3"
+__version__ = "minato 0.9.0"
 
 import asyncio
 import json
@@ -20,6 +20,7 @@ from datetime import datetime, timedelta, timezone
 import aiohttp
 import discord
 
+import affinity
 import body
 import decide
 import names
@@ -74,21 +75,27 @@ async def jev_interest(text):
 
 async def jev(text, question):
     """確率。**失敗は None（棄権）で、偽ではない。**"""
+    return (await jev_many(text, {"q": question})).get("q")
+
+
+async def jev_many(text, questions):
+    """複数の問いを1回で聞く。{名前: 確率}。失敗した問いは入らない（棄権）。"""
     key = CONFIG.get("typesafe_key")
     if not key:
-        return None
+        return {}
     body = {"state": text, "model": "jev-latest",
-            "questions": {"interest": {"type": "noul", "instructions": question}}}
+            "questions": {k: {"type": "noul", "instructions": q} for k, q in questions.items()}}
     try:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as sess:
             async with sess.post(JEV_URL, json=body, headers={"Authorization": "Bearer " + key}) as r:
                 if r.status != 200:
                     log.warning("Jevが %d を返した", r.status)
-                    return None
-                return float((await r.json())["answers"]["interest"]["noul"])
+                    return {}
+                ans = (await r.json())["answers"]
+                return {k: float(ans[k]["noul"]) for k in questions if k in ans}
     except Exception as e:
         log.warning("Jev失敗: %s", e)
-        return None
+        return {}
 
 
 # --- LLM: 文面書き -------------------------------------------------------------
@@ -210,6 +217,13 @@ async def pick_name(text, display):
     p = await jev(f"【相手】{display}（この発言の返信先・メンション先）\n【発言】{text}",
                   f"発言者は【相手】のことを「{form}」という呼び名で呼んだり指したりしているか。")
     return form if p is not None and p >= decide.INTEREST_TRUE else None
+
+
+# --- 好感度を数える（数えるだけ。態度にはまだ効かせない） ---------------------------
+LIKE_QS = {"attack": "発言者は【相手】を本気でけなしている、または喧嘩を売っているか（冗談やノリの軽いいじりは含めない）。",
+           "tease": "発言者は【相手】を冗談やノリで軽くいじっているか。",
+           "support": "発言者は【相手】を庇っている、褒めている、または気にかけているか。"}
+LIKE_ME_Q = "発言者は、この会話の中でナギ（N4Gi）のことを庇っている、褒めている、または気にかけているか。"
 
 
 # --- 評価（右クリックメニュー。本人にしか見えない） -------------------------------
@@ -334,6 +348,10 @@ class Minato(discord.Client):
 
     async def owner_command(self, m):
         cmd = m.content.split()[1] if len(m.content.split()) > 1 else "status"
+        if cmd == "likes":
+            await m.reply("-# " + affinity.format_summary(self.s.get("likes", {})).replace("\n", "\n-# "),
+                          mention_author=False)
+            return
         if cmd == "names":
             await m.reply("-# " + names.format_summary(self.s.get("names", {}), self.user.id)
                           .replace("\n", "\n-# "), mention_author=False)
@@ -402,6 +420,7 @@ class Minato(discord.Client):
             return
         e["mentions_me"] = self.user in m.mentions or bool(persona.NAMES.search(m.content))
         asyncio.create_task(self.learn_name(m))
+        asyncio.create_task(self.learn_like(m))
         self.batch.append(e)
         self.last_at = now()
         if self.batch_task is None or self.batch_task.done():
@@ -430,6 +449,52 @@ class Minato(discord.Client):
             log.info("呼び名: %s → %s「%s」", m.author.display_name, display, form)
         except Exception:
             log.exception("呼び名の読み取りに失敗")
+
+    async def learn_like(self, m):
+        """誰かに向けた発言から、ナギの発言者への好感度を数える（ナギ宛て・ナギが好きな相手宛ての両方）。"""
+        try:
+            ref = m.reference.resolved if m.reference else None
+            target = (ref.author if isinstance(ref, discord.Message) else
+                      next((u for u in m.mentions if u != m.author), None))
+            named = bool(persona.NAMES.search(m.content))
+            if target is None and named:
+                target = self.user
+            if target is None or target == m.author or (target.bot and target != self.user):
+                return
+            t = now()
+            store = self.s.setdefault("likes", {})
+            me = target == self.user
+            if not me and not named:
+                rel = affinity.relation(store.get(str(target.id), {}).get("v", affinity.INITIAL))
+                if rel is None:
+                    return          # ナギが特に好きでない相手どうしのやりとりは見ない（Jevも呼ばない）
+            who = "N4Gi（ナギ）" if me else target.display_name
+            convo = "\n".join(f"{x['author']}: {x['text']}" for x in list(self.recent)[-6:])
+            qs = dict(LIKE_QS)
+            if named and not me:
+                qs["me"] = LIKE_ME_Q
+            p = await jev_many(f"【発言者】{m.author.display_name}\n【相手】{who}\n【直前の会話】\n{convo}", qs)
+            if not p:
+                return
+            author = affinity.get(store, m.author.id, m.author.display_name, t)
+            quote = m.clean_content
+            kind = affinity.judge(p.get("attack"), p.get("tease"), p.get("support"))
+            if me:
+                d = affinity.apply(author, affinity.DELTA[(kind, "me")], t, f"ナギに{kind}", quote) if kind else 0
+                if not d and kind is None:
+                    d = affinity.chat(author, t)
+            else:
+                rel = affinity.relation(affinity.get(store, target.id, target.display_name, t)["v"])
+                d = 0
+                if kind and rel:
+                    d = affinity.apply(author, affinity.DELTA[(kind, rel)], t, f"{target.display_name}に{kind}", quote)
+                if p.get("me", 0) >= affinity.TRUE:
+                    d += affinity.apply(author, affinity.DELTA[("support", "me")], t, "ナギを庇った", quote)
+            save_state(self.s)
+            log.info("好感度: %s→%s %s 判定=%s（%s）→ %+g = %+.0f", m.author.display_name, who, quote[:30], kind,
+                     " ".join(f"{k}{v:.2f}" for k, v in p.items()), d, author["v"])
+        except Exception:
+            log.exception("好感度の読み取りに失敗")
 
     async def wait_and_decide(self, started):
         """最後の発言から QUIET_SEC 静かになるか、MAX_WAIT_SEC 経ったら、1回だけ判断する。
