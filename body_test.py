@@ -61,15 +61,23 @@ ok("コンビニに行く" in ev and b["away_why"] == "コンビニ", "腹が減
 ok(B.felt_sleepy(b, T + timedelta(minutes=2)) >= 30 + B.POST_MEAL_SLEEPY - 0.01 and b["sleepy"] < 31, "食後は1時間だけ眠い（溜まる眠気には足さない）")
 b = B.new(T); b["hunger"] = 75; b["energy"] = 10
 ev = at(b, T + timedelta(minutes=1))
-ok("コンビニに行く" not in ev, "気力が無いと食べに行くのも面倒")
+ok("コンビニに行く" not in ev and "落ちる" not in ev, "気力が低いと食べに行くのも面倒。まだ落ちはしない")
+b = B.new(T); b["energy"] = 5
+ev = at(b, T + timedelta(minutes=1))
 ok("落ちる" in ev, "気力が尽きたら落ちる")
+b["away_until"] = None; b["energy"] = 5; b["at"] = (T + timedelta(minutes=59)).isoformat()
+ev = at(b, T + timedelta(hours=1))
+ok("落ちる" not in ev, "落ちてから3時間は、また落ちない")
+b["energy"] = 5; b["at"] = (T + timedelta(hours=3)).isoformat()
+ev = at(b, T + timedelta(hours=3, minutes=1))
+ok("落ちる" in ev, "3時間過ぎたらまた落ちうる")
 b2 = B.new(T)
 ok(B.after_baito(b2, T) and b2["hunger"] == 0, "まかないで空腹が戻る")
 
 # 相互作用
 b = B.new(T); b["hunger"] = 80; b["energy"] = 50
 at(b, T + timedelta(hours=1))
-ok(abs(b["energy"] - 52) < 0.01, "腹が減っていると気力の戻りが半分")
+ok(abs(b["energy"] - (50 + B.ENERGY_IDLE / 2)) < 0.01, "腹が減っていると気力の戻りが半分")
 b = B.new(T); b["sleepy"] = 70
 b["at"] = T.replace(hour=1).isoformat(); at(b, T.replace(hour=1) + timedelta(hours=1))
 ok(abs(b["hunger"] - 42) < 0.01, "深夜に眠いと腹が減る")

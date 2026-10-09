@@ -16,10 +16,11 @@ SLEEPY_ASLEEP = -9.0       # 80で寝ると、8時間弱で抜ける
 HUNGER_AWAKE = 8.0
 HUNGER_NIGHT = 12.0        # 深夜に眠いと夜食が欲しくなる
 HUNGER_ASLEEP = 3.0
-ENERGY_IDLE = 4.0          # 一人でいると少しずつ戻る
+ENERGY_IDLE = 8.0          # 一人でいると戻る（4だと夕方に尽きて抜けてばかりだった）
 ENERGY_ASLEEP = 10.0
 ENERGY_LECTURE = -10.0
 ENERGY_BAITO = -6.0
+TALK_BASE, TALK_PER_CHARS = 1.0, 40   # 1回送るごとの気力（2＋文字数÷30だと、盛り上がった夕方に尽きた）
 
 # --- しきい値 ---------------------------------------------------------------
 SLEEP_AT = 80              # 夜（1〜5時）にこれを超えたら寝る
@@ -31,7 +32,9 @@ WAKE_LATEST = 12           # それでも12時には起きる
 HANGRY = 70                # 空腹がこれ以上だと、気力が戻りにくく、とげが出やすい
 SNACK_AT = 70              # これ以上なら（金と気力があれば）コンビニに行く
 LUNCH_FROM = 40
-LOW_ENERGY = 15            # これを割ったら「ちょっと落ちる」
+LOW_ENERGY = 8             # これを割ったら「ちょっと落ちる」
+LAZY_ENERGY = 15           # これを割ると、コンビニに行くのも面倒
+DROP_GAP = timedelta(hours=3)   # 落ちたら、次に落ちるまでこれだけ空ける（低い間は口数を減らすだけ）
 POST_MEAL_SLEEPY = 10      # 食後の眠気（1時間だけ。溜まる眠気には足さない）
 POST_MEAL = timedelta(hours=1)
 FUN_HOLD = timedelta(minutes=40)   # 楽しい話題が続くと、その間は眠気を感じにくい
@@ -133,14 +136,16 @@ def tick(b, t, state, has_alarm, alarm):
     if 12 <= t.hour < 14 and b["hunger"] >= LUNCH_FROM and b["money"] >= BROKE:
         _eat(b, LUNCH_YEN, t)
         ev.append("昼を食べた")
-    elif b["hunger"] >= SNACK_AT and b["money"] >= SNACK_YEN and b["energy"] >= LOW_ENERGY:
+    elif b["hunger"] >= SNACK_AT and b["money"] >= SNACK_YEN and b["energy"] >= LAZY_ENERGY:
         _eat(b, SNACK_YEN, t)
         b["away_until"], b["away_why"] = (t + timedelta(minutes=15)).isoformat(), "コンビニ"
         ev.append("コンビニに行く")
         return ev
     # 気力が尽きたら落ちる
-    if b["energy"] < LOW_ENERGY:
+    dropped = b.get("dropped_at") and t - datetime.fromisoformat(b["dropped_at"]) < DROP_GAP
+    if b["energy"] < LOW_ENERGY and not dropped:
         b["away_until"], b["away_why"] = (t + timedelta(minutes=45)).isoformat(), "一人になりたい"
+        b["dropped_at"] = t.isoformat()
         b["energy"] += 15
         ev.append("落ちる")
     return ev
@@ -154,7 +159,7 @@ def after_baito(b, t):
 
 def spend_talk(b, text_len, t, cold=False, hot=False, praised=False):
     """1回送ると気力が減る。眠いと減りが速い。冷たくされると減り、楽しい話題と褒めで少し戻る。"""
-    cost = 2 + text_len / 30
+    cost = TALK_BASE + text_len / TALK_PER_CHARS
     if felt_sleepy(b, t) > 70:
         cost *= 2
     b["energy"] -= cost
