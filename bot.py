@@ -6,7 +6,7 @@
 - **安全装置**: 1人あたり／全体の1日上限、オーナーの停止コマンド（!minato stop / start / status）
 - 体の変数（body.py）が寝る・食べる・抜けるを決める。人格と呼ばれ方は persona.py に置く
 """
-__version__ = "minato 0.6.0"
+__version__ = "minato 0.6.1"
 
 import asyncio
 import json
@@ -121,6 +121,10 @@ HUMAN_CLAIM = re.compile(r"人間(だ|です|やで)|普通にいる|AIじゃな
 SELF_NAME = re.compile(f"(?:{persona.NAMES.pattern})(?:のこと|は|が|も|的に)", re.I)
 
 
+# 突き放すだけの一言（「うるさい」「別に」「やめろ」）。塩対応が続いたので、これだけの返事は引き直す
+CURT = re.compile(r"^(うる(さい|せ[えー]?)|うっせ[えー]?|別に|やめろ|知らん|は[?？]?)[。、!！?？wｗ…\s]*$")
+
+
 def asks_ai(text):
     return bool(AI_Q.search(text))
 
@@ -135,7 +139,7 @@ def parse(text, kind, target_text=""):
         e = obj.get("reaction")
         return e if e in persona.REACTIONS else None
     msgs = [m.strip() for m in obj.get("messages") or [] if isinstance(m, str) and m.strip()]
-    if not msgs or any(POLITE.search(m) or SELF_NAME.search(m) for m in msgs):
+    if not msgs or any(POLITE.search(m) or SELF_NAME.search(m) for m in msgs) or all(CURT.match(m) for m in msgs):
         return None
     if asks_ai(target_text) and any(HUMAN_CLAIM.search(m) for m in msgs):
         return None   # 人間だと偽らない（このサーバーではAIが混ざっていると告知している）
