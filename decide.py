@@ -12,6 +12,11 @@ SHARE_SLACK = 1.5       # 「参加人数分の1」の何倍まで喋ってよ�
 PICKUP_AFTER = timedelta(minutes=3)    # 誰も反応しないままこれだけ経った発言は拾いに行く
 PICKUP_UNTIL = timedelta(minutes=30)   # これより古い発言は、もう拾わない
 PICKUP_RATE = 0.6                      # 拾う確率（1つの発言につき1回だけ抽選）
+START_QUIET = timedelta(minutes=90)    # チャンネルがこれだけ静かなら、自分から話題を出しうる
+START_ALIVE = timedelta(hours=24)      # 人間がこの間に一度も話していなければ出さない（空の部屋に話さない）
+START_RATE = 1 / 45                    # 条件を満たした1分ごとの確率（平均45分後）
+STARTS_PER_DAY = 2
+START_ENERGY = 40
 PENDING_TTL = timedelta(minutes=3)   # 書き始めてからこれ以上かかったら捨てる
 DEFER_TTL = timedelta(hours=12)      # 後で返す呼びかけの賞味期限
 
@@ -144,8 +149,10 @@ def choose(addressed, interest, share, humans, state, r, energy=70):
     - Jev の「食いつく話題か」が真なら返す確率を上げる。棄権（None）は「食いつかない」扱い
     - **気力が低いと口数が減る**（25未満: 呼ばれても一言、雑談はリアクションだけ）。LLMに任せると無視された（2026-10-08 比較）
     """
-    if state in ("寝ている", "バイト中", "離席中"):
+    if state in ("寝ている", "離席中"):
         return "defer" if addressed else "none"
+    if state == "バイト中":
+        return "short" if addressed else "none"      # 呼ばれたら、手が空いた時にスマホで一言
     tired = energy < 25
     if addressed:
         if state == "講義中" or tired:
@@ -173,6 +180,19 @@ def choose(addressed, interest, share, humans, state, r, energy=70):
     return "none"
 
 
+def start_due(t, last_at, last_human_at, state, energy, starts_today, r):
+    """自分から話題を出すか。チャンネルが静かで、自分が空いていて、今日まだ出し足りない時だけ。"""
+    if state not in ("ふつう", "深夜", "起きたて") or energy < START_ENERGY or starts_today >= STARTS_PER_DAY:
+        return False
+    if 2 <= t.hour < 11:
+        return False
+    if last_at is None or last_human_at is None:
+        return False
+    if t - last_at < START_QUIET or t - last_human_at > START_ALIVE:
+        return False
+    return r < START_RATE
+
+
 def pickup(recent, me, t, state, energy):
     """誰も反応しないまま放置された人間の発言を返す（友達なら拾いに行く）。無ければ None。
 
@@ -191,6 +211,8 @@ def notice_sec(state, r):
     """メッセージに気付いて読み始めるまでの秒数。**いつも即答しない**（画面を見ていない時間がある）。"""
     if state == "講義中":
         return 60 + r * 300                       # 1〜6分（講義中もスマホは見ている）
+    if state == "バイト中":
+        return 600 + r * 1800                     # 10〜40分（手が空いた時にしか見られない）
     if r < 0.70:
         return 5 + (r / 0.70) * 35                # 5〜40秒
     if r < 0.95:

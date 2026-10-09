@@ -58,7 +58,9 @@ eq(D.my_share([{"author": "A"}, {"author": "X", "bot": True}], me)[1], 1, "Bot�
 # 型の選択
 eq(D.choose(True, None, 0.9, 3, "寝ている", 0.0), "defer", "寝ている間に呼ばれたら後で返す")
 eq(D.choose(False, 0.99, 0.0, 3, "寝ている", 0.0), "none", "寝ている間の雑談は拾わない")
-eq(D.choose(True, None, 0.0, 3, "バイト中", 0.9), "defer", "バイト中に呼ばれたら後で返す")
+eq(D.choose(True, None, 0.0, 3, "バイト中", 0.9), "short", "バイト中に呼ばれたら、遅れて一言")
+eq(D.choose(False, 0.99, 0.0, 3, "バイト中", 0.0), "none", "バイト中の雑談は拾わない")
+eq(600 <= D.notice_sec("バイト中", 0.5) <= 2400, True, "バイト中は10〜40分後に見る")
 eq(D.choose(True, None, 0.0, 3, "講義中", 0.9), "short", "講義中は一言")
 eq(D.choose(False, 0.99, 0.0, 3, "講義中", 0.5), "none", "講義中の雑談はほぼ拾わない")
 eq(D.choose(True, None, 0.9, 3, "ふつう", 0.9), "normal", "話しかけられたらシェアに関係なく返す")
@@ -115,6 +117,18 @@ eq(D.pickup(lone, me, P0 + timedelta(hours=1), "ふつう", 70), None, "古す�
 eq(D.pickup(lone, me, P0, "講義中", 70), None, "講義中は拾いに行かない")
 eq(D.pickup(lone, me, P0, "ふつう", 10), None, "気力が無いと拾わない")
 eq(D.pickup(lone + [{"author": me, "at": P0.isoformat()}], me, P0, "ふつう", 70), None, "自分が最後なら拾わない")
+
+# 自分から話題を出す
+S0 = TUE.replace(hour=15)
+quiet, alive = S0 - timedelta(hours=2), S0 - timedelta(hours=2)
+eq(D.start_due(S0, quiet, alive, "ふつう", 70, 0, 0.0), True, "2時間静かなら出しうる")
+eq(D.start_due(S0, S0 - timedelta(minutes=30), alive, "ふつう", 70, 0, 0.0), False, "30分前に誰か話していたら出さない")
+eq(D.start_due(S0, quiet, S0 - timedelta(days=2), "ふつう", 70, 0, 0.0), False, "人が来ていない部屋には出さない")
+eq(D.start_due(S0, quiet, alive, "ふつう", 70, 2, 0.0), False, "1日2回まで")
+eq(D.start_due(S0, quiet, alive, "講義中", 70, 0, 0.0), False, "講義中は出さない")
+eq(D.start_due(S0, quiet, alive, "ふつう", 20, 0, 0.0), False, "気力が無いと出さない")
+eq(D.start_due(TUE.replace(hour=5), quiet, alive, "深夜", 70, 0, 0.0), False, "明け方は出さない")
+eq(D.start_due(S0, quiet, alive, "ふつう", 70, 0, 0.9), False, "毎分の抽選に外れたら出さない")
 
 # 経過時間
 eq(D.ago(30), "今", "1分未満は今")
