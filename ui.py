@@ -3,7 +3,7 @@
 
 - state.json・ratings.jsonl は**読むだけ**（書くのは Bot。同時に書いて壊さないため）
 - 書くのは topics.json だけ（話題の快・覚醒の座標。Bot は数日後に読み始める）
-- Tailscale からだけ届く内部ネットワーク（192.168.100.x）で待ち受ける
+- 外から届かないネットワークのアドレスで待ち受ける（認証は無い）
 """
 import asyncio
 import json
