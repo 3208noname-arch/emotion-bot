@@ -142,7 +142,7 @@ python body_test.py && python decide_test.py && python ratings_test.py && python
 ## 安全装置
 
 - 1人あたり1日30回、全体で1日150回まで返事をする（`decide.py`）
-- `config.json` に `status_channel_id` を入れると、30分ごとにそのチャンネルへ様子（状態・体の数値・直近30分の返事の回数と出来事）を送る
+- `config.json` に `status_channel_id` を入れると、30分ごとにそのチャンネルへ様子（状態・体の数値・直近30分の返事の回数と出来事）を送る。そのチャンネルでは会話に反応せず、`!minato` コマンドだけ受け付ける
 - チャンネルで `!minato status` ／ `ratings` ／ `names` は誰でも使える。`!minato stop` ／ `start` は `config.json` の `owner_id` の人だけ
 - 敬語や「人間だ」という返事は、はじいて書き直させる（AIかと聞かれた時に人間だと偽らない）
 
