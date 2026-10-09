@@ -6,7 +6,7 @@
 - **安全装置**: 1人あたり／全体の1日上限、オーナーの停止コマンド（!minato stop / start / status）
 - 体の変数（body.py）が寝る・食べる・抜けるを決める。人格と呼ばれ方は persona.py に置く
 """
-__version__ = "minato 0.8.0"
+__version__ = "minato 0.8.1"
 
 import asyncio
 import json
@@ -355,7 +355,10 @@ class Minato(discord.Client):
         if self.ch is None or m.channel.id != self.ch.id:
             return
         if m.content.startswith("!minato"):
-            if str(m.author.id) == str(CONFIG["owner_id"]):
+            # 見るだけのコマンドは全員。止める・動かすは安全装置なのでオーナーだけ
+            parts = m.content.split()
+            owner_only = len(parts) > 1 and parts[1] in ("stop", "start")
+            if not owner_only or str(m.author.id) == str(CONFIG["owner_id"]):
                 await self.owner_command(m)
             return
         if m.flags.ephemeral or m.interaction_metadata:   # 評価の確認など、本人にしか見えない応答は会話ではない
