@@ -6,7 +6,7 @@
 - **安全装置**: 1人あたり／全体の1日上限、オーナーの停止コマンド（!minato stop / start / status）
 - 体の変数（body.py）が寝る・食べる・抜けるを決める。人格と呼ばれ方は persona.py に置く
 """
-__version__ = "minato 0.8.1"
+__version__ = "minato 0.8.2"
 
 import asyncio
 import json
@@ -251,6 +251,7 @@ ANNOUNCE = {"寝た": "眠気が限界なので、今から寝る。会話から
             "落ちる": "人と話すのがしんどくなったので、少し会話から抜ける。重くならない一言だけ",
             "コンビニに行く": "腹が減ったので、今からコンビニに行く。一言だけ",
             "戻った": "コンビニから戻った／少し休んで戻った。一言だけ"}
+STATUS_EVERY = 30   # 分。ステータス用チャンネル（config の status_channel_id）に定期的に送る
 START_NOTE = ("チャンネルがしばらく静か。誰かへの返事ではなく、自分から話題を1つ振る。"
               "ネタは【最近の出来事】【体の状態】か、自分の趣味・好き嫌いから選ぶ。"
               "軽い報告か質問で、相手が返しやすい形にする。前置きや挨拶はしない")
@@ -344,12 +345,40 @@ class Minato(discord.Client):
         if cmd in ("stop", "start"):
             self.s["stopped"] = cmd == "stop"
             save_state(self.s)
+        await m.reply("-# " + self.status_line(now()), mention_author=False)
+
+    def status_line(self, t):
         c = self.s.get("counts", {})
-        await m.reply(f"-# {__version__}: {'停止中' if self.s.get('stopped') else '稼働中'}"
-                      f"・今日 {c.get('total', 0)}/{decide.TOTAL_DAILY_MAX} 回・{decide.presence(now())}"
-                      f"・後で返す {len(self.s.get('deferred', []))} 件"
-                      f"・{body.as_numbers(self.body, now())}",
-                      mention_author=False)
+        st = self.s.get("starts", {})
+        # 今の様子は体の変数込みで出す（予定だけで見ると、寝ているのに「ふつう」と出る）
+        return (f"{__version__}: {'停止中' if self.s.get('stopped') else '稼働中'}"
+                f"・{decide.activity(t, self.body)['label']}"
+                f"・今日 {c.get('total', 0)}/{decide.TOTAL_DAILY_MAX} 回"
+                f"・自分から {st.get('n', 0) if st.get('day') == decide.day_key(t) else 0}/{decide.STARTS_PER_DAY}"
+                f"・後で返す {len(self.s.get('deferred', []))} 件"
+                f"・{body.as_numbers(self.body, t)}")
+
+    async def post_status(self, t):
+        """STATUS_EVERY 分ごとに、ステータス用チャンネルへ今の様子と直近の出来事を送る。"""
+        cid = CONFIG.get("status_channel_id")
+        slot = t.replace(minute=t.minute - t.minute % STATUS_EVERY, second=0, microsecond=0).isoformat()
+        if not cid or self.s.get("status_slot") == slot:
+            return
+        self.s["status_slot"] = slot
+        ch = self.get_channel(int(cid))
+        if ch is None:
+            log.warning("ステータス用チャンネル %s が見えない", cid)
+            return
+        total = self.s.get("counts", {}).get("total", 0)
+        sent = total - self.s.get("status_total", 0)
+        self.s["status_total"] = total
+        since = t - timedelta(minutes=STATUS_EVERY)
+        ev = [f"{datetime.fromisoformat(e['at']):%H:%M} {e['what']}" for e in self.s.get("events", [])
+              if datetime.fromisoformat(e["at"]) > since]
+        text = (f"**{t:%H:%M}** {self.status_line(t)}\n"
+                f"-# 直近{STATUS_EVERY}分: 返事 {sent if sent >= 0 else total} 回"
+                + (f"・{'／'.join(ev)}" if ev else ""))
+        await ch.send(text)
 
     async def on_message(self, m):
         if self.ch is None or m.channel.id != self.ch.id:
@@ -496,6 +525,7 @@ class Minato(discord.Client):
             await asyncio.sleep(60)
             try:
                 async with self.lock:
+                    await self.post_status(now())       # 止めている間も様子は送る
                     if self.s.get("stopped"):
                         continue
                     t = now()

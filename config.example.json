@@ -3,5 +3,6 @@
   "channel_id": "話すチャンネルのID",
   "owner_id": "!minato コマンドを使える人のユーザーID",
   "typesafe_key": "TypeSafe（Jev）のAPIキー",
-  "openrouter_key": "OpenRouter のAPIキー"
+  "openrouter_key": "OpenRouter のAPIキー",
+  "status_channel_id": "（任意）30分ごとに様子を送るチャンネルのID。空なら送らない"
 }
