@@ -2,7 +2,7 @@
 import os
 import tempfile
 
-import ratings as R
+from engine import ratings as R
 
 p = os.path.join(tempfile.mkdtemp(), "r.jsonl")
 R.append(p, {"rater_id": 1, "message_id": 10, "is_me": True, "label": "自然"})

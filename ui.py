@@ -13,10 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from aiohttp import web
 
-import affinity
-import body
-import decide
-import ratings
+from engine import affinity, body, decide, ratings
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state.json")
@@ -124,7 +121,7 @@ async def topics_put(req):
 
 
 async def index(_):
-    return web.FileResponse(os.path.join(HERE, "ui.html"))
+    return web.FileResponse(os.path.join(HERE, "web", "ui.html"))
 
 
 def app():

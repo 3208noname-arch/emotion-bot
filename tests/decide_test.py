@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime, timedelta
 
-import decide as D
+from engine import decide as D
 
 MON = datetime(2026, 10, 5)   # 月曜（1限あり）
 TUE = datetime(2026, 10, 6)   # 火曜（1限なし・バイト）

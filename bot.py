@@ -20,12 +20,8 @@ from datetime import datetime, timedelta, timezone
 import aiohttp
 import discord
 
-import affinity
-import body
-import decide
-import names
 import persona
-import ratings
+from engine import affinity, body, decide, names, ratings
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 JST = timezone(timedelta(hours=9))

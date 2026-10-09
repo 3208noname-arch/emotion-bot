@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime, timedelta
 
-import body as B
+from engine import body as B
 
 T = datetime(2026, 10, 6, 20, 0)   # 火曜20時
 n = 0

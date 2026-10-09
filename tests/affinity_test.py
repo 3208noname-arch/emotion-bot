@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime, timedelta
 
-import affinity as A
+from engine import affinity as A
 
 n = 0
 
