@@ -163,8 +163,17 @@ python -m tests
 ## ファイル
 
 ```
-bot.py              Discord・Jev・OpenRouterの配線（Botの入口）
+bot.py              Botの入口
 ui.py               様子を見る Web UI（UIの入口）
+app/                Discord 側。機能ごとに分けてある
+  client.py           発言を溜めて判断し、返す（本体）
+  llm.py              文面を書く（OpenRouter）。型と口調の検め
+  jev.py              会話の読み取り（TypeSafe）
+  life.py             体を進める、抜ける・戻る一言、放置された発言を拾う、自分から話題を出す
+  learning.py         呼び名と好感度を数える
+  rating.py           右クリックメニュー「評価」
+  status.py           !minato コマンドと、ステータス用チャンネルへの定期送信
+  store.py            設定・状態ファイルの置き場と時刻
 engine/             感情と振る舞いの規則。すべて純関数で、外部サービスには触れない
   decide.py           返すかどうか・型・予定・上限
   body.py             体の変数と相互作用
