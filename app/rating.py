@@ -16,29 +16,47 @@ class CommentModal(discord.ui.Modal, title="ひと言（空欄でもOK）"):
     def __init__(self, rec):
         super().__init__()
         self.rec = rec
-        self.comment.placeholder = ratings.HINTS.get(rec["label"])
 
     async def on_submit(self, interaction):
         self.rec["comment"] = self.comment.value.strip()
         ratings.append(RATINGS_PATH, self.rec)
-        log.info("評価: %s「%s」%s", self.rec["label"], self.rec["text"][:40],
+        name = ratings.label_text(self.rec)
+        log.info("評価: %s「%s」%s", name, self.rec["text"][:40],
                  f"— {self.rec['comment']}" if self.rec["comment"] else "")
-        await interaction.response.send_message(f"「{self.rec['label']}」で記録した。ありがとう", ephemeral=True)
+        await interaction.response.send_message(f"「{name}」で記録した。ありがとう", ephemeral=True)
 
 
-class RateView(discord.ui.View):
-    def __init__(self, rec):
+class ChoiceView(discord.ui.View):
+    """ボタンを並べ、押されたら on_pick(interaction, 押された名前) を呼ぶ。"""
+
+    def __init__(self, names, on_pick):
         super().__init__(timeout=300)
-        for label in ratings.LABELS:
-            b = discord.ui.Button(label=label, style=discord.ButtonStyle.secondary)
-            b.callback = self.make_cb(label)
+        for name in names:
+            b = discord.ui.Button(label=name, style=discord.ButtonStyle.secondary)
+            b.callback = self._cb(name, on_pick)
             self.add_item(b)
-        self.rec = rec
 
-    def make_cb(self, label):
+    @staticmethod
+    def _cb(name, on_pick):
         async def cb(interaction):
-            await interaction.response.send_modal(CommentModal({**self.rec, "label": label}))
+            await on_pick(interaction, name)
         return cb
+
+
+def rate_view(rec):
+    """1段目: 評価を選ぶ。「感情がズレてる」のように詳しく分けるものは、2段目で中身を選んでからコメント欄を開く。"""
+    async def pick_label(interaction, label):
+        r = {**rec, "label": label}
+        details = ratings.DETAILS.get(label)
+        if not details:
+            await interaction.response.send_modal(CommentModal(r))
+            return
+
+        async def pick_detail(interaction2, detail):
+            await interaction2.response.send_modal(CommentModal({**r, "detail": detail}))
+        await interaction.response.edit_message(content=f"> {rec['text'][:80]}\n「{label}」の中身はどれ？",
+                                                view=ChoiceView(details, pick_detail))
+    return ChoiceView(ratings.LABELS, pick_label)
 
 
 class RatingMixin:
@@ -55,4 +73,4 @@ class RatingMixin:
             rec["state"] = self.recall(message.id)   # 喋った時の内部の値（評価と突き合わせる）
         await interaction.response.send_message(
             f"> {rec['text'][:80]}\nこの発言はどうだった？（あなたにしか見えません）",
-            view=RateView(rec), ephemeral=True)
+            view=rate_view(rec), ephemeral=True)

@@ -10,7 +10,13 @@ import os
 
 # 「感情がズレてる」は、反応の強さや向き（怒る・喜ぶ・照れる…）が場面に合わない時（2026-10-10 追加）
 LABELS = ["自然", "流れとズレてる", "キャラじゃない", "感情がズレてる", "バグ"]
-HINTS = {"感情がズレてる": "強すぎ／弱すぎ／向きが違う（喜ぶ場面で怒る等）など"}
+# 2段目で中身を選ばせるもの。コメント欄だと書かれないことが多く（22件中8件が空）、何を直せばよいか決まらないため
+DETAILS = {"感情がズレてる": ["強すぎ", "弱すぎ", "向きが違う"]}
+
+
+def label_text(r):
+    """「感情がズレてる（強すぎ）」のように、2段目まで含めた名前。"""
+    return f"{r['label']}（{r['detail']}）" if r.get("detail") else r["label"]
 
 
 def append(path, rec):
@@ -49,11 +55,16 @@ def latest(recs):
 
 
 def summary(recs):
-    """{"bot": {ラベル: 件数}, "human": {...}}"""
-    out = {"bot": {k: 0 for k in LABELS}, "human": {k: 0 for k in LABELS}}
+    """{"bot": {ラベル: 件数}, "human": {...}, "details": {"bot": {ラベル: {中身: 件数}}, "human": {...}}}"""
+    out = {"bot": {k: 0 for k in LABELS}, "human": {k: 0 for k in LABELS},
+           "details": {"bot": {}, "human": {}}}
     for r in latest(recs):
         if r["label"] in LABELS:
-            out["bot" if r["is_me"] else "human"][r["label"]] += 1
+            who = "bot" if r["is_me"] else "human"
+            out[who][r["label"]] += 1
+            if r.get("detail"):
+                d = out["details"][who].setdefault(r["label"], {})
+                d[r["detail"]] = d.get(r["detail"], 0) + 1
     return out
 
 
@@ -64,6 +75,8 @@ def format_summary(s):
         if not n:
             lines.append(f"{name}: まだ評価なし")
             continue
-        parts = "・".join(f"{k} {v}（{v * 100 // n}%）" for k, v in s[who].items() if v)
+        det = s.get("details", {}).get(who, {})
+        sub = {k: " " + "・".join(f"{dk}{dv}" for dk, dv in det[k].items()) if k in det else "" for k in s[who]}
+        parts = "・".join(f"{k} {v}（{v * 100 // n}%{sub[k]}）" for k, v in s[who].items() if v)
         lines.append(f"{name}: {n}件 — {parts}")
     return "\n".join(lines)

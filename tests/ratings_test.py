@@ -22,4 +22,12 @@ tl = [(datetime(2026, 10, 8, 2), "minato 0.1.0"), (datetime(2026, 10, 9, 14), "m
 assert R.version_at(tl, datetime(2026, 10, 9, 12)) == "minato 0.1.0"
 assert R.version_at(tl, datetime(2026, 10, 9, 15)) == "minato 0.9.0"
 assert R.version_at(tl, datetime(2026, 10, 7)) is None, "起動より前は分からない"
-print("ok 8")
+p2 = os.path.join(tempfile.mkdtemp(), "r.jsonl")
+R.append(p2, {"rater_id": 1, "message_id": 20, "is_me": True, "label": "感情がズレてる", "detail": "強すぎ"})
+R.append(p2, {"rater_id": 2, "message_id": 20, "is_me": True, "label": "感情がズレてる", "detail": "強すぎ"})
+R.append(p2, {"rater_id": 1, "message_id": 21, "is_me": True, "label": "感情がズレてる", "detail": "向きが違う"})
+s2 = R.summary(R.load(p2))
+assert s2["details"]["bot"]["感情がズレてる"] == {"強すぎ": 2, "向きが違う": 1}, s2
+assert "感情がズレてる 3（100% 強すぎ2・向きが違う1）" in R.format_summary(s2), R.format_summary(s2)
+assert R.label_text({"label": "感情がズレてる", "detail": "弱すぎ"}) == "感情がズレてる（弱すぎ）"
+print("ok 11")
