@@ -8,12 +8,13 @@
 import asyncio
 import json
 import os
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 
 from aiohttp import web
 
-from engine import affinity, body, decide, ratings
+from engine import affinity, body, decide, ratings, snapshot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state.json")
@@ -67,9 +68,39 @@ async def state(_):
     })
 
 
+_timeline = {"at": None, "data": []}
+
+
+async def timeline():
+    """Bot の起動ログから [(起動した時刻, 版), ...] を作る（10分だけ覚えておく）。"""
+    t = now()
+    if _timeline["at"] and t - _timeline["at"] < timedelta(minutes=10):
+        return _timeline["data"]
+    p = await asyncio.create_subprocess_exec("journalctl", "-u", "minato-bot", "--no-pager", "-o", "cat",
+                                             "-g", "起動。チャンネル", stdout=asyncio.subprocess.PIPE)
+    out, _ = await p.communicate()
+    data = []
+    for ln in out.decode("utf-8", "replace").splitlines():
+        m = re.match(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ INFO (\S+ \S+) 起動", ln)
+        if m:
+            data.append((datetime.strptime(m.group(1), "%Y-%m-%d %H:%M:%S"), m.group(2)))
+    _timeline.update(at=t, data=data)
+    return data
+
+
+def said_at(message_id):
+    """Discord のメッセージIDから、送られた時刻（日本時間）を出す。"""
+    ms = (int(message_id) >> 22) + 1420070400000
+    return datetime.fromtimestamp(ms / 1000, JST).replace(tzinfo=None)
+
+
 async def rating_list(_):
     rs = ratings.load(RATINGS)
-    return web.json_response({"summary": ratings.format_summary(ratings.summary(rs)), "items": list(reversed(rs))[:200]})
+    tl = await timeline()
+    items = [{**r, "state_text": snapshot.describe(r.get("state")),
+              "version": (r.get("state") or {}).get("version") or ratings.version_at(tl, said_at(r["message_id"]))}
+             for r in reversed(rs)][:200]
+    return web.json_response({"summary": ratings.format_summary(ratings.summary(rs)), "items": items})
 
 
 async def log_tail(req):

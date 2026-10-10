@@ -39,7 +39,8 @@ class LifeMixin:
                                                                          target["author_id"], t):
             return
         log.info("放置された発言を拾う: %s", target["text"][:40])
-        await self.reply({"target": target, "addressed": True, "kind": "normal", "act": act, "at": t},
+        await self.reply({"target": target, "addressed": True, "kind": "normal", "act": act, "at": t,
+                          "source": "pickup"},
                          "この発言には誰も反応していない。友達として拾って、話を広げる（質問を返す・自分の話をする）")
 
     async def start_topic(self, t, act):
@@ -63,10 +64,12 @@ class LifeMixin:
         st["n"] += 1
         save_state(self.s)
         log.info("自分から話題を出す → %s", " ｜ ".join(out))
+        sent = []
         for text in out:
             async with self.ch.typing():
                 await asyncio.sleep(decide.typing_sec(text, act["device"]))
-            await self.ch.send(text)
+            sent.append(await self.ch.send(text))
+        self.remember(sent, t, act, {"source": "start", "kind": "normal"})
         self.last_sent_at = now()
         body.spend_talk(self.body, sum(map(len, out)), t)
 
@@ -107,5 +110,6 @@ class LifeMixin:
             log.info("体の都合で一言（%s）→ %s", say[0], out[0])
             async with self.ch.typing():
                 await asyncio.sleep(decide.typing_sec(out[0], "スマホ"))
-            await self.ch.send(out[0])
+            sent = await self.ch.send(out[0])
+            self.remember([sent], t, decide.activity(t, b), {"source": "announce", "kind": "short", "why": say[0]})
             self.last_sent_at = now()

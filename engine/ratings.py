@@ -8,7 +8,9 @@
 import json
 import os
 
-LABELS = ["自然", "流れとズレてる", "キャラじゃない", "バグ"]
+# 「感情がズレてる」は、反応の強さや向き（怒る・喜ぶ・照れる…）が場面に合わない時（2026-10-10 追加）
+LABELS = ["自然", "流れとズレてる", "キャラじゃない", "感情がズレてる", "バグ"]
+HINTS = {"感情がズレてる": "強すぎ／弱すぎ／向きが違う（喜ぶ場面で怒る等）など"}
 
 
 def append(path, rec):
@@ -26,6 +28,16 @@ def load(path):
         except ValueError:
             pass
     return out
+
+
+def version_at(timeline, t):
+    """その時刻に動いていた版。timeline は [(起動した時刻, 版), ...]（古い順）。分からなければ None。"""
+    v = None
+    for at, ver in timeline:
+        if at > t:
+            break
+        v = ver
+    return v
 
 
 def latest(recs):

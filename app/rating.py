@@ -16,6 +16,7 @@ class CommentModal(discord.ui.Modal, title="ひと言（空欄でもOK）"):
     def __init__(self, rec):
         super().__init__()
         self.rec = rec
+        self.comment.placeholder = ratings.HINTS.get(rec["label"])
 
     async def on_submit(self, interaction):
         self.rec["comment"] = self.comment.value.strip()
@@ -50,6 +51,8 @@ class RatingMixin:
                "message_id": message.id, "author": message.author.display_name,
                "is_me": message.author == self.user, "text": self.describe(message),
                "context": [f"{m['author']}: {m['text']}" for m in before]}
+        if rec["is_me"]:
+            rec["state"] = self.recall(message.id)   # 喋った時の内部の値（評価と突き合わせる）
         await interaction.response.send_message(
             f"> {rec['text'][:80]}\nこの発言はどうだった？（あなたにしか見えません）",
             view=RateView(rec), ephemeral=True)

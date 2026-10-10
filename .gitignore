@@ -3,6 +3,7 @@ persona.py
 state.json
 state.json.*
 ratings.jsonl
+snapshots.jsonl
 *.bak*
 __pycache__/
 .env

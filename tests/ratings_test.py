@@ -17,4 +17,9 @@ assert s["human"]["キャラじゃない"] == 1, s
 assert "ナギ: 2件" in R.format_summary(s), R.format_summary(s)
 assert R.format_summary(R.summary([])).count("まだ評価なし") == 2
 assert R.load(p + ".none") == []
-print("ok 5")
+from datetime import datetime
+tl = [(datetime(2026, 10, 8, 2), "minato 0.1.0"), (datetime(2026, 10, 9, 14), "minato 0.9.0")]
+assert R.version_at(tl, datetime(2026, 10, 9, 12)) == "minato 0.1.0"
+assert R.version_at(tl, datetime(2026, 10, 9, 15)) == "minato 0.9.0"
+assert R.version_at(tl, datetime(2026, 10, 7)) is None, "起動より前は分からない"
+print("ok 8")

@@ -14,6 +14,7 @@ from app.learning import LearningMixin
 from app.life import LifeMixin
 from app.llm import write
 from app.rating import RatingMixin
+from app.snapshot import SnapshotMixin
 from app.status import StatusMixin
 from app.store import CONFIG, JST, load_state, now, save_state
 from engine import body, decide
@@ -26,7 +27,7 @@ QUIET_SEC = 6        # 最後の発言からこれだけ静かになったら判
 MAX_WAIT_SEC = 20    # 会話が続いていても、これだけ溜めたら判断する
 
 
-class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, discord.Client):
+class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, SnapshotMixin, discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -195,13 +196,17 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, discord.Client)
             return
         # 会話が先に進んでいる時、または話しかけられた時は「返信」で宛先を示す
         moved_on = self.recent and self.recent[-1]["id"] != target["id"]
+        sent = []
         for i, text in enumerate(out):
             async with self.ch.typing():
                 await asyncio.sleep(decide.typing_sec(text, act["device"]))
             if i == 0 and (moved_on or plan["addressed"]):
-                await msg.reply(text, mention_author=False)
+                sent.append(await msg.reply(text, mention_author=False))
             else:
-                await self.ch.send(text)
+                sent.append(await self.ch.send(text))
+        self.remember(sent, t, act, {"source": plan.get("source", "reply"), "kind": kind,
+                                     "addressed": plan["addressed"], "hot": bool(plan.get("hot"))},
+                      target["author_id"])
 
     async def defer_loop(self):
         """1分ごとに体の変数を進める（寝る・食べる・落ちるを自分で選ぶ）。
@@ -229,6 +234,6 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, discord.Client)
                     note = decide.late_note(mins, due["was"], due.get("why"))
                     log.info("後で返す: %s（%d分前・%s）", due["text"][:40], mins, due.get("why") or due["was"])
                     await self.reply({"target": due, "addressed": True, "kind": "normal",
-                                      "act": act, "at": t}, note)
+                                      "act": act, "at": t, "source": "late"}, note)
             except Exception:
                 log.exception("後で返す処理に失敗")

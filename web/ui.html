@@ -111,7 +111,7 @@ async function loadState() {
 async function loadRatings() {
   const r = await (await fetch("api/ratings")).json();
   $("#rsum").textContent = r.summary;
-  $("#rtable").innerHTML = "<tr><th>時刻</th><th>評価</th><th>発言</th><th>コメント</th></tr>" + r.items.map(x => `<tr><td class="mute">${esc(x.at.slice(5, 16).replace("T", " "))}</td><td>${esc(x.label)}</td><td>${esc(x.author)}: ${esc(x.text)}</td><td>${esc(x.comment)}</td></tr>`).join("");
+  $("#rtable").innerHTML = "<tr><th>時刻</th><th>版</th><th>評価</th><th>発言</th><th>コメント</th><th>その時の状態</th></tr>" + r.items.map(x => `<tr><td class="mute">${esc(x.at.slice(5, 16).replace("T", " "))}</td><td class="mute" style="white-space:nowrap">${esc((x.version || "?").replace("minato ", ""))}</td><td>${esc(x.label)}</td><td>${esc(x.author)}: ${esc(x.text)}</td><td>${esc(x.comment)}</td><td class="mute">${esc(x.state_text)}</td></tr>`).join("");
 }
 
 async function loadLog() {

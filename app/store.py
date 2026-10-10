@@ -8,6 +8,7 @@ JST = timezone(timedelta(hours=9))
 CONFIG = json.load(open(os.path.join(ROOT, "config.json"), encoding="utf-8"))
 STATE_PATH = os.path.join(ROOT, "state.json")
 RATINGS_PATH = os.path.join(ROOT, "ratings.jsonl")
+SNAPSHOTS_PATH = os.path.join(ROOT, "snapshots.jsonl")   # 発言した時の内部の値
 
 
 def now():
