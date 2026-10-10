@@ -123,6 +123,7 @@ Botとは別のサービスで動く、様子を見るための画面です（`d
 - **話題の好き嫌い**: 話題ごとの快（−1〜+1）と覚醒（0〜1）の座標を、散布図のドラッグか表で編集する（`topics.json`。見本は `examples/topics.example.json`）。Botが使い始めるのは居心地の仕組みを入れてから
 - **好感度**: 人ごとの値と、動いた出来事
 - **呼び名**、**評価**（評価した発言を喋った時の版と内部の値も出す）、**ログ**（journalctl の絞り込み）
+- **情報**: 動いている版とサービスの状態、関連リンクと覚え書き（`links.json`。見本は `examples/links.example.json`）
 
 `state.json` と `ratings.jsonl` は読むだけで、書くのは `topics.json` だけです（Botと同時に書いて壊さないため）。
 認証は付けていません。外から届かないネットワークのアドレスで待ち受けてください（`python ui.py 待ち受けるアドレス`。既定は 127.0.0.1:8090）。
@@ -186,7 +187,7 @@ examples/           設定・人格・話題の見本（コピーして直下に
 deploy/             systemd のサービス定義
 ```
 
-直下に置くが GitHub には入れないもの: `config.json`（鍵）、`persona.py`（人格の原文）、`topics.json`、`state.json`、`ratings.jsonl`、`snapshots.jsonl`。
+直下に置くが GitHub には入れないもの: `config.json`（鍵）、`persona.py`（人格の原文）、`topics.json`、`state.json`、`ratings.jsonl`、`snapshots.jsonl`、`links.json`。
 
 ## ライセンス
 

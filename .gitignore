@@ -4,6 +4,7 @@ state.json
 state.json.*
 ratings.jsonl
 snapshots.jsonl
+links.json
 *.bak*
 __pycache__/
 .env

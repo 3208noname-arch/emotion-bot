@@ -20,6 +20,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state.json")
 TOPICS = os.path.join(HERE, "topics.json")
 RATINGS = os.path.join(HERE, "ratings.jsonl")
+LINKS = os.path.join(HERE, "links.json")   # 情報タブに出すリンクとメモ（見本は examples/links.example.json）
+SERVICES = ("minato-bot", "nagi-ui")
 JST = timezone(timedelta(hours=9))
 HOST, PORT = (sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"), 8090
 
@@ -151,6 +153,21 @@ async def topics_put(req):
     return web.json_response(obj)
 
 
+async def service(name):
+    p = await asyncio.create_subprocess_exec("systemctl", "show", name, "-p", "ActiveState",
+                                             "-p", "ActiveEnterTimestamp", stdout=asyncio.subprocess.PIPE)
+    out, _ = await p.communicate()
+    kv = dict(ln.split("=", 1) for ln in out.decode().splitlines() if "=" in ln)
+    return {"name": name, "state": kv.get("ActiveState", "?"), "since": kv.get("ActiveEnterTimestamp", "")}
+
+
+async def info(_):
+    tl = await timeline()
+    return web.json_response({**load(LINKS, {"sections": [], "facts": []}),
+                              "version": tl[-1][1] if tl else None,
+                              "services": [await service(n) for n in SERVICES]})
+
+
 async def index(_):
     return web.FileResponse(os.path.join(HERE, "web", "ui.html"))
 
@@ -158,7 +175,7 @@ async def index(_):
 def app():
     a = web.Application()
     a.add_routes([web.get("/", index), web.get("/api/state", state), web.get("/api/ratings", rating_list),
-                  web.get("/api/log", log_tail), web.get("/api/topics", topics_get), web.put("/api/topics", topics_put)])
+                  web.get("/api/log", log_tail), web.get("/api/info", info), web.get("/api/topics", topics_get), web.put("/api/topics", topics_put)])
     return a
 
 

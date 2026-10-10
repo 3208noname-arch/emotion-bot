@@ -33,6 +33,7 @@ pre{white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.5;mar
 svg text{fill:var(--mute);font-size:11px}
 .pt{cursor:grab}.pt text{fill:var(--fg);font-size:12px}
 details summary{cursor:pointer}
+a{color:var(--acc)}
 #msg{min-height:1.4em}
 </style>
 </head>
@@ -42,7 +43,7 @@ details summary{cursor:pointer}
   <nav id="tabs">
     <button data-t="state" class="on">様子</button><button data-t="topics">話題の好き嫌い</button>
     <button data-t="likes">好感度</button><button data-t="names">呼び名</button>
-    <button data-t="ratings">評価</button><button data-t="log">ログ</button>
+    <button data-t="ratings">評価</button><button data-t="log">ログ</button><button data-t="info">情報</button>
   </nav>
 </header>
 <main>
@@ -74,6 +75,11 @@ details summary{cursor:pointer}
 <section id="ratings"><div class="card"><pre id="rsum"></pre></div><div class="card"><table id="rtable"></table></div></section>
 <section id="log"><div class="card"><div class="row" style="margin-bottom:8px"><button class="btn ghost" id="reloadLog">再読み込み</button>
   <input id="logFilter" placeholder="絞り込み（例: 判断 / 好感度 / 拾う）" style="max-width:320px"></div><pre id="logBox"></pre></div></section>
+<section id="info">
+  <div class="card"><div class="k">動いているもの</div><table id="svc"></table></div>
+  <div id="linkCards"></div>
+  <div class="card"><div class="k">覚え書き</div><table id="facts"></table></div>
+</section>
 </main>
 
 <script>
@@ -87,6 +93,7 @@ document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
   b.classList.add("on"); $("#" + b.dataset.t).classList.add("on");
   if (b.dataset.t === "ratings") loadRatings();
   if (b.dataset.t === "log") loadLog();
+  if (b.dataset.t === "info") loadInfo();
 });
 
 async function loadState() {
@@ -123,6 +130,14 @@ function showLog() {
   const lines = logLines.filter(l => !l.includes("RESUMED") && (!f || l.includes(f)))
     .map(l => l.replace(/^\S+ \S+ python\[\d+\]: \S+ /, ""));
   $("#logBox").textContent = lines.reverse().join("\n");
+}
+async function loadInfo() {
+  const d = await (await fetch("api/info")).json();
+  $("#svc").innerHTML = `<tr><td>版</td><td>${esc(d.version || "?")}</td></tr>` + d.services.map(s =>
+    `<tr><td>${esc(s.name)}</td><td class="${s.state === "active" ? "pos" : "neg"}">${esc(s.state)}</td><td class="mute">${esc(s.since)}から</td></tr>`).join("");
+  $("#linkCards").innerHTML = d.sections.map(sec => `<div class="card"><div class="k">${esc(sec.title)}</div>
+    ${sec.items.map(i => `<div><a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.name)}</a></div>`).join("")}</div>`).join("");
+  $("#facts").innerHTML = d.facts.map(([k, v]) => `<tr><td class="mute" style="white-space:nowrap">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
 }
 $("#reloadLog").onclick = loadLog; $("#logFilter").oninput = showLog;
 

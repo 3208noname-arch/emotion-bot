@@ -1,0 +1,32 @@
+{
+ "sections": [
+  {
+   "title": "コード",
+   "items": [
+    {
+     "name": "GitHub",
+     "url": "https://github.com/あなた/emotion-bot"
+    }
+   ]
+  },
+  {
+   "title": "外部サービス",
+   "items": [
+    {
+     "name": "OpenRouter",
+     "url": "https://openrouter.ai/activity"
+    }
+   ]
+  }
+ ],
+ "facts": [
+  [
+   "置き場",
+   "Bot を置いた場所"
+  ],
+  [
+   "サービス",
+   "minato-bot.service／nagi-ui.service"
+  ]
+ ]
+}
