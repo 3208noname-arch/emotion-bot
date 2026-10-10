@@ -54,7 +54,8 @@ def rate_view(rec):
 
         async def pick_detail(interaction2, detail):
             await interaction2.response.send_modal(CommentModal({**r, "detail": detail}))
-        await interaction.response.edit_message(content=f"> {rec['text'][:80]}\n「{label}」の中身はどれ？",
+        await interaction.response.edit_message(content=f"> {rec['text'][:80]}\n「{label}」の中身はどれ？\n"
+                                                        f"-# {ratings.DETAIL_HELP.get(label, '')}",
                                                 view=ChoiceView(details, pick_detail))
     return ChoiceView(ratings.LABELS, pick_label)
 
