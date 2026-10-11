@@ -19,6 +19,12 @@ ok(A.judge(0.9, 0.2, 0.1) == "attack", "本気のけなし")
 ok(A.judge(0.9, 0.8, 0.1) is None, "いじりなら下げない")
 ok(A.judge(0.1, 0.1, 0.9) == "support", "庇う・褒める")
 ok(A.judge(None, None, None) is None, "Jevの失敗は何も起きない扱い")
+ok(A.judge(0.1, 0.3, 0.9, 0.9) == "joke", "褒め言葉の形でも、冗談の前振りなら冗談")
+ok(A.judge(0.1, 0.6, 0.9, 0.2) is None, "いじり混じりの褒めは本心と読まない")
+ok(A.judge(0.1, 0.1, 0.9, 0.2) == "support", "冗談でなければ褒め")
+ok(A.DELTA[("joke", "me")] == 2, "冗談は+2")
+ok(not A.ripe(3, timedelta(minutes=2)) and A.ripe(6, timedelta(0)) and A.ripe(0, timedelta(minutes=10)),
+   "6件続くか10分経ったら読む")
 
 # 増減
 s = {}

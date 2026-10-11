@@ -41,6 +41,7 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
         self.batch_task = None
         self.last_at = None
         self.lock = asyncio.Lock()
+        self.like_queue = []     # 好感度の判定待ち（後の会話を見てから読む。再起動で消えてよい）
         self.last_sent_at = None   # 最後に送った時刻。気付くまでの間に別の返事を送っていたら、雑談の割り込みは捨てる
         self.tree = discord.app_commands.CommandTree(self)
         self.tree.add_command(discord.app_commands.ContextMenu(name="評価", callback=self.rate))
@@ -104,11 +105,12 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
             return
         e = self.entry(m)
         self.recent.append(e)
+        asyncio.create_task(self.flush_likes())   # 後回しにした好感度の判定（ナギ自身の発言も「その後の会話」に数える）
         if m.author.bot:          # 自分と他のBotには反応しない
             return
         e["mentions_me"] = self.user in m.mentions or bool(persona.NAMES.search(m.content))
         asyncio.create_task(self.learn_name(m))
-        asyncio.create_task(self.learn_like(m))
+        self.learn_like(m)
         self.batch.append(e)
         self.last_at = now()
         if self.batch_task is None or self.batch_task.done():

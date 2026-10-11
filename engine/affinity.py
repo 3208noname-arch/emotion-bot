@@ -6,6 +6,10 @@
 - ナギが好きな相手をけなした人も下げる（庇った人は上げる）
 - 1人1日 ±15 まで。1日ごとに 0 との差を1割縮める（根に持ちすぎない）
 - 好感度が動いた出来事を、時刻つきで人ごとに残す（根に持つ話を「さっき」「昨日」で区別して出すため）
+- **判定は後回しにする**（10-11）。発言の後に AFTER_N 件続くか AFTER_WAIT 経ってから、前後の会話ごと読む。
+  かきの「いいバイトがあるんだけど紹介しよっか？」は、直後の1件だけ見て「褒めた」+6 になった。
+  闇バイトの誘いの冗談だと分かるのは、その後の流れだった
+- 冗談・ボケ（罠の前振りを含む）は +2（一緒にふざけられる相手。ユーザーが +2 を選んだ）
 """
 from datetime import datetime, timedelta
 
@@ -13,14 +17,16 @@ INITIAL = 20.0
 DAILY_CAP = 15.0
 DECAY = 0.9                # 1日ごとに 0 との差に掛ける
 TRUE = 0.70                # Jev をこれ以上で真と読む
-TEASE_MAX = 0.50           # いじりがこれ以上なら、けなしとは読まない
+TEASE_MAX = 0.50           # いじり・冗談がこれ以上なら、けなしとも本心の褒めとも読まない
+AFTER_N = 6                # 判定する発言の後、これだけ続いたら読む
+AFTER_WAIT = timedelta(minutes=10)   # 続かなくても、これだけ経ったら読む
 CHAT_PLUS, CHAT_PER_DAY = 1.0, 3
 KEEP = timedelta(days=14)
 KEEP_N = 10
 BANDS = [(50, "仲いい"), (15, "好き"), (-14, "ふつう"), (-49, "気まずい"), (-100, "苦手")]
 
 # 起きたこと → 増減。「me」はナギ自身への言動、「friend」「close」はナギが好き／仲いい相手への言動
-DELTA = {("attack", "me"): -8, ("support", "me"): 6,
+DELTA = {("attack", "me"): -8, ("support", "me"): 6, ("joke", "me"): 2,
          ("attack", "close"): -8, ("support", "close"): 4,
          ("attack", "friend"): -4, ("support", "friend"): 2}
 
@@ -42,13 +48,22 @@ def get(store, uid, display, t):
     return p
 
 
-def judge(attack, tease, support):
-    """Jev の確率から、起きたことを1つに決める。どれも当たらなければ None。失敗（None）は当たらない扱い。"""
-    if support is not None and support >= TRUE:
+def judge(attack, tease, support, joke=None):
+    """Jev の確率から、起きたことを1つに決める。どれも当たらなければ None。失敗（None）は当たらない扱い。
+    冗談なら、褒め言葉の形でも本心の褒めとは読まない（「偉すぎ。いいバイトがあるんだけど」は前振り）。"""
+    playful = max(tease or 0, joke or 0) >= TEASE_MAX
+    if joke is not None and joke >= TRUE:
+        return "joke"
+    if support is not None and support >= TRUE and not playful:
         return "support"
-    if attack is not None and attack >= TRUE and (tease is None or tease < TEASE_MAX):
+    if attack is not None and attack >= TRUE and not playful:
         return "attack"
     return None
+
+
+def ripe(after_n, waited):
+    """後回しにした発言を、もう読んでよいか。after_n はその後に続いた発言数、waited は経った時間。"""
+    return after_n >= AFTER_N or waited >= AFTER_WAIT
 
 
 def relation(v):

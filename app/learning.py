@@ -1,6 +1,7 @@
 """呼び名と好感度を数える（数えるだけ。会話と態度にはまだ使わない）。"""
 import json
 import logging
+from datetime import datetime
 
 import discord
 
@@ -36,9 +37,12 @@ async def pick_name(text, display):
 # --- 好感度を数える（数えるだけ。態度にはまだ効かせない） ---------------------------
 LIKE_QS = {"attack": "発言者は【相手】を本気でけなしている、または喧嘩を売っているか（冗談やノリの軽いいじりは含めない）。",
            "tease": "発言者は【相手】を冗談やノリで軽くいじっているか。",
-           "support": "発言者は【相手】を庇っている、褒めている、または気にかけているか。"}
-DID = {"attack": "けなされた", "support": "庇われた"}   # 気分の理由（受け身）
-LIKE_ME_Q = "発言者は、この会話の中でナギ（N4Gi）のことを庇っている、褒めている、または気にかけているか。"
+           "support": "発言者は【相手】を本心から庇っている、褒めている、または気にかけているか"
+                      "（冗談の前振り・お世辞・皮肉は含めない）。",
+           "joke": "発言者は【相手】に、冗談・ボケ・ノリで言っているか"
+                   "（わざと怪しい話を持ちかける、罠にかける前振りも含む。その後の会話で冗談だと分かるものも含む）。"}
+LIKE_ME_Q = "発言者は、この会話の中でナギ（N4Gi）のことを本心から庇っている、褒めている、または気にかけているか。"
+FLOW_GAP = 300   # 返信もメンションも無い発言でも、ナギの発言からこの秒数以内に続いたものはナギ宛てとみなす
 
 
 class LearningMixin:
@@ -66,40 +70,66 @@ class LearningMixin:
         except Exception:
             log.exception("呼び名の読み取りに失敗")
 
-    async def learn_like(self, m):
-        """誰かに向けた発言から、ナギの発言者への好感度を数える（ナギ宛て・ナギが好きな相手宛ての両方）。"""
+    def learn_like(self, m):
+        """誰かに向けた発言を、好感度の判定待ちに積む（ナギ宛て・ナギが好きな相手宛ての両方）。
+        **その場では読まない。**後に続く会話まで見てから flush_likes で読む（冗談かどうかは後の流れで分かる）。"""
+        ref = m.reference.resolved if m.reference else None
+        target = (ref.author if isinstance(ref, discord.Message) else
+                  next((u for u in m.mentions if u != m.author), None))
+        named = bool(persona.NAMES.search(m.content))
+        recent = list(self.recent)
+        prev = recent[-2] if len(recent) >= 2 else None
+        if target is None and (named or (prev and prev["author_id"] == self.user.id and prev.get("at") and
+                                         (now() - datetime.fromisoformat(prev["at"])).total_seconds() < FLOW_GAP)):
+            target = self.user          # 名前を呼んだ、またはナギの発言に続けて言った
+        if target is None or target == m.author or (target.bot and target != self.user):
+            return
+        me = target == self.user
+        if not me and not named:
+            v = self.s.get("likes", {}).get(str(target.id), {}).get("v", affinity.INITIAL)
+            if affinity.relation(v) is None:
+                return          # ナギが特に好きでない相手どうしのやりとりは見ない（Jevも呼ばない）
+        self.like_queue.append({"m": m, "target": target, "me": me, "named": named, "at": now(),
+                                "before": recent[-7:-1]})
+
+    async def flush_likes(self):
+        """判定待ちのうち、後ろに AFTER_N 件続いたか AFTER_WAIT 経ったものを読む。"""
+        t = now()
+        ids = [x["id"] for x in self.recent]
+        ready, wait = [], []
+        for q in self.like_queue:
+            after = len(ids) - ids.index(q["m"].id) - 1 if q["m"].id in ids else affinity.AFTER_N
+            (ready if affinity.ripe(after, t - q["at"]) else wait).append(q)
+        self.like_queue = wait
+        for q in ready:
+            await self.judge_like(q)
+
+    async def judge_like(self, q):
         try:
-            ref = m.reference.resolved if m.reference else None
-            target = (ref.author if isinstance(ref, discord.Message) else
-                      next((u for u in m.mentions if u != m.author), None))
-            named = bool(persona.NAMES.search(m.content))
-            if target is None and named:
-                target = self.user
-            if target is None or target == m.author or (target.bot and target != self.user):
-                return
+            m, target, me, named = q["m"], q["target"], q["me"], q["named"]
             t = now()
             store = self.s.setdefault("likes", {})
-            me = target == self.user
-            if not me and not named:
-                rel = affinity.relation(store.get(str(target.id), {}).get("v", affinity.INITIAL))
-                if rel is None:
-                    return          # ナギが特に好きでない相手どうしのやりとりは見ない（Jevも呼ばない）
+            recent = list(self.recent)
+            ids = [x["id"] for x in recent]
+            after = recent[ids.index(m.id) + 1:][:affinity.AFTER_N] if m.id in ids else []
+            fmt = lambda xs: "\n".join(f"{x['author']}: {x['text']}" for x in xs) or "（無し）"
             who = "N4Gi（ナギ）" if me else target.display_name
-            convo = "\n".join(f"{x['author']}: {x['text']}" for x in list(self.recent)[-6:])
             qs = dict(LIKE_QS)
             if named and not me:
                 qs["me"] = LIKE_ME_Q
-            p = await jev_many(f"【発言者】{m.author.display_name}\n【相手】{who}\n【直前の会話】\n{convo}", qs)
+            p = await jev_many(f"【発言者】{m.author.display_name}\n【相手】{who}\n【直前の会話】\n{fmt(q['before'])}\n"
+                               f"【判定する発言】\n{m.author.display_name}: {m.clean_content}\n"
+                               f"【その後の会話】\n{fmt(after)}", qs)
             if not p:
                 return
             author = affinity.get(store, m.author.id, m.author.display_name, t)
             quote = m.clean_content
-            kind = affinity.judge(p.get("attack"), p.get("tease"), p.get("support"))
+            kind = affinity.judge(p.get("attack"), p.get("tease"), p.get("support"), p.get("joke"))
             name = m.author.display_name
             if me:
                 d = affinity.apply(author, affinity.DELTA[(kind, "me")], t, f"ナギに{kind}", quote) if kind else 0
                 if kind:
-                    self.mood_hit(mood.people_delta(kind, "me"), f"{name}に{DID[kind]}")
+                    self.mood_hit(mood.people_delta(kind, "me"), mood.people_reason(kind, name))
                 else:
                     self.mood_hit(mood.chat_delta(author["v"]), f"{name}に話しかけられた")
                 if not d and kind is None:
@@ -107,14 +137,14 @@ class LearningMixin:
             else:
                 rel = affinity.relation(affinity.get(store, target.id, target.display_name, t)["v"])
                 d = 0
-                if kind and rel:
+                if (kind, rel) in affinity.DELTA:
                     d = affinity.apply(author, affinity.DELTA[(kind, rel)], t, f"{target.display_name}に{kind}", quote)
-                    self.mood_hit(mood.people_delta(kind, rel), f"{target.display_name}が{name}に{DID[kind]}")
+                    self.mood_hit(mood.people_delta(kind, rel), mood.people_reason(kind, target.display_name, by=name))
                 if p.get("me", 0) >= affinity.TRUE:
                     d += affinity.apply(author, affinity.DELTA[("support", "me")], t, "ナギを庇った", quote)
-                    self.mood_hit(mood.people_delta("support", "me"), f"{name}に{DID['support']}")
+                    self.mood_hit(mood.people_delta("support", "me"), mood.people_reason("support", name))
             save_state(self.s)
-            log.info("好感度: %s→%s %s 判定=%s（%s）→ %+g = %+.0f", m.author.display_name, who, quote[:30], kind,
-                     " ".join(f"{k}{v:.2f}" for k, v in p.items()), d, author["v"])
+            log.info("好感度: %s→%s %s 判定=%s（%s・後ろ%d件）→ %+g = %+.0f", name, who, quote[:30], kind,
+                     " ".join(f"{k}{v:.2f}" for k, v in p.items()), len(after), d, author["v"])
         except Exception:
             log.exception("好感度の読み取りに失敗")

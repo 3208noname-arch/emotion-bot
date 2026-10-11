@@ -19,7 +19,7 @@ BODY_GAIN = 0.6
 BROKE_PENALTY = 5
 
 # 人 → 一時的な上下
-PEOPLE = {("attack", "me"): -15, ("support", "me"): 8,
+PEOPLE = {("attack", "me"): -15, ("support", "me"): 8, ("joke", "me"): 3,
           ("attack", "close"): -8, ("support", "close"): 3,
           ("attack", "friend"): -4, ("support", "friend"): 2}
 CHAT_PER_LIKE = 1 / 20          # 話しかけられた時: 好感度20で+1、60で+3、−40で−2
@@ -62,6 +62,14 @@ def nudge(m, delta, t, why):
 def people_delta(kind, rel):
     """けなし・庇いの増減（affinity.judge と affinity.relation の値をそのまま受ける）。"""
     return PEOPLE.get((kind, rel), 0)
+
+
+REASON = {"attack": "{who}にけなされた", "support": "{who}に庇われた", "joke": "{who}の冗談で笑った"}
+
+
+def people_reason(kind, who, by=None):
+    """気分を動かした理由の文。by があれば第三者への言動（「鴉羽がかきにけなされた」）。"""
+    return (f"{who}が" + REASON[kind].format(who=by)) if by else REASON[kind].format(who=who)
 
 
 def chat_delta(like):

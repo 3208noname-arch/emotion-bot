@@ -103,6 +103,7 @@ class LifeMixin:
         self.s["last_sched"] = sched
         self.note_events(t, [e for e in ev if e not in ("戻った",)])
         self.mood_settle(t)
+        await self.flush_likes()      # 会話が止まっても10分で読む
         if ev:
             log.info("体: %s（%s）", "・".join(ev), body.as_numbers(b, t))
         save_state(self.s)

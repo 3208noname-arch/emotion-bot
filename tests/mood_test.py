@@ -33,6 +33,10 @@ M.nudge(m, 0.2, T, "小さすぎる")
 ok(m["events"] == [], "小さい動きは出来事に残さない")
 ok(M.people_delta("attack", "me") < 0 < M.people_delta("support", "me"), "けなしで下がり、庇いで上がる")
 ok(M.people_delta(None, "me") == 0, "何も起きていなければ0")
+ok(M.people_delta("joke", "me") > 0, "冗談で少し上がる")
+ok(M.people_delta("joke", "close") == 0, "第三者への冗談では動かない")
+ok(M.people_reason("joke", "かき") == "かきの冗談で笑った", "理由の文")
+ok(M.people_reason("attack", "鴉羽", by="かき") == "鴉羽がかきにけなされた", "第三者への言動")
 ok(M.chat_delta(60) == 3 and M.chat_delta(-40) == -2, "話しかけられた時の向きは好感度で決まる")
 
 # 話題
