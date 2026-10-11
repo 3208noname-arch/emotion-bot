@@ -49,8 +49,9 @@ a{color:var(--acc)}
 <main>
 <section id="state" class="on">
   <div class="card"><div class="row"><div class="v" id="act"></div><span id="run" class="mute"></span></div>
-    <div class="mute" id="feel"></div></div>
+    <div class="mute" id="feel"></div><div class="mute" id="moodWords"></div></div>
   <div class="grid card" id="bodyGrid"></div>
+  <div class="card"><div class="k">気分を動かした出来事（直近6時間）</div><table id="moodEvents"></table></div>
   <div class="card"><div class="k">直近12時間の出来事（話題のネタ）</div><table id="events"></table></div>
 </section>
 
@@ -106,6 +107,9 @@ async function loadState() {
   const meter = (k, v, max = 100) => `<div><div class="k">${k}</div><div class="v">${v}</div><div class="bar"><i style="width:${Math.max(0, Math.min(100, v / max * 100))}%"></i></div></div>`;
   $("#bodyGrid").innerHTML = b ? meter("眠気（感じている）", b.felt_sleepy) + meter("空腹", b.hunger) + meter("気力", b.energy)
     + `<div><div class="k">残高</div><div class="v">${b.money.toLocaleString()}円</div></div>` : "体の記録なし";
+  const md = s.mood;
+  $("#moodWords").textContent = md ? `気分: ${md.words}（${sign(md.v)}／体で決まる基準 ${sign(md.base)}）` : "気分: まだ記録なし";
+  $("#moodEvents").innerHTML = md && md.events.length ? md.events.map(e => `<tr><td class="mute">${esc(e.at.slice(11, 16))}</td><td>${esc(e.why)}</td><td class="${e.delta > 0 ? "pos" : "neg"}">${sign(e.delta)}</td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
   $("#events").innerHTML = s.events.length ? s.events.map(e => `<tr><td class="mute">${esc(e.at.slice(11, 16))}</td><td>${esc(e.what)}</td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
   $("#likeList").innerHTML = s.likes.length ? s.likes.map(p => `<details class="card" style="margin:8px 0">
       <summary><b>${esc(p.display)}</b> <span class="${p.v >= 15 ? "pos" : p.v <= -15 ? "neg" : ""}">${sign(p.v)}</span> <span class="mute">${esc(p.band)}</span></summary>

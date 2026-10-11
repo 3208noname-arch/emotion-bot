@@ -15,8 +15,9 @@ class SnapshotMixin:
         if not ids:
             return
         rel = self.s.get("likes", {}).get(str(target_id), {}).get("v") if target_id else None
+        self.mood_settle(t)
         rec = snapshot.build(t, act["state"], self.body, body.as_feelings(self.body, t), relation=rel,
-                             mood=None, decision=decision, version=__version__)
+                             mood=round(self.mood["v"]), decision=decision, version=__version__)
         ratings.append(SNAPSHOTS_PATH, {**rec, "message_ids": ids})
 
     @staticmethod

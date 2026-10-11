@@ -5,7 +5,7 @@
 - activity: 今の様子（寝ている・講義中・ふつう など）
 - body: 体の変数（眠気・空腹・気力・残高）と、LLM に渡した体の感じ
 - relation: 返信先の人への好感度（無ければ None）
-- mood: 気分（居心地。未実装の間は None）
+- mood: 気分（居心地 −100〜+100。0.9.8 から）
 - version: 喋った時に動いていた版
 - decision: なぜ喋ったか（source: reply／late／pickup／start／announce、型、話しかけられたか、食いつく話題か）
 """

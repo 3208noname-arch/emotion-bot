@@ -8,7 +8,7 @@ import persona
 from app.jev import jev, jev_many
 from app.llm import post
 from app.store import now, save_state
-from engine import affinity, decide, names
+from engine import affinity, decide, mood, names
 
 log = logging.getLogger("minato")
 
@@ -37,6 +37,7 @@ async def pick_name(text, display):
 LIKE_QS = {"attack": "発言者は【相手】を本気でけなしている、または喧嘩を売っているか（冗談やノリの軽いいじりは含めない）。",
            "tease": "発言者は【相手】を冗談やノリで軽くいじっているか。",
            "support": "発言者は【相手】を庇っている、褒めている、または気にかけているか。"}
+DID = {"attack": "けなされた", "support": "庇われた"}   # 気分の理由（受け身）
 LIKE_ME_Q = "発言者は、この会話の中でナギ（N4Gi）のことを庇っている、褒めている、または気にかけているか。"
 
 
@@ -94,8 +95,13 @@ class LearningMixin:
             author = affinity.get(store, m.author.id, m.author.display_name, t)
             quote = m.clean_content
             kind = affinity.judge(p.get("attack"), p.get("tease"), p.get("support"))
+            name = m.author.display_name
             if me:
                 d = affinity.apply(author, affinity.DELTA[(kind, "me")], t, f"ナギに{kind}", quote) if kind else 0
+                if kind:
+                    self.mood_hit(mood.people_delta(kind, "me"), f"{name}に{DID[kind]}")
+                else:
+                    self.mood_hit(mood.chat_delta(author["v"]), f"{name}に話しかけられた")
                 if not d and kind is None:
                     d = affinity.chat(author, t)
             else:
@@ -103,8 +109,10 @@ class LearningMixin:
                 d = 0
                 if kind and rel:
                     d = affinity.apply(author, affinity.DELTA[(kind, rel)], t, f"{target.display_name}に{kind}", quote)
+                    self.mood_hit(mood.people_delta(kind, rel), f"{target.display_name}が{name}に{DID[kind]}")
                 if p.get("me", 0) >= affinity.TRUE:
                     d += affinity.apply(author, affinity.DELTA[("support", "me")], t, "ナギを庇った", quote)
+                    self.mood_hit(mood.people_delta("support", "me"), f"{name}に{DID['support']}")
             save_state(self.s)
             log.info("好感度: %s→%s %s 判定=%s（%s）→ %+g = %+.0f", m.author.display_name, who, quote[:30], kind,
                      " ".join(f"{k}{v:.2f}" for k, v in p.items()), d, author["v"])

@@ -79,6 +79,9 @@ def line(m, t):
     return f"［{decide.ago(sec)}］{m['author']}: {m['text']}"
 
 
+MOOD_GUIDE = "口調・返事の長さ・食いつき方ににじませるだけにする。「機嫌が悪い」など気分の言葉そのものは口に出さない"
+
+
 # 評価で「クレーンで1000円溶かした」と、起きていない出来事を話し、残高も減っていなかった（10-11）。
 # 禁じるより、言ったことを本当にやったことにする（話題を出すにも行動は要る。ユーザー）
 DID_GUIDE = ("今さっき新しく何かをした（買った・食べた・遊んだ・どこかへ行った）と話すなら、"
@@ -98,7 +101,7 @@ def parse_did(text):
     return {"what": str(d["what"]).strip()[:30], "yen": int(yen) if yen.isdigit() else 0, "ate": d.get("ate") is True}
 
 
-async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None):
+async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None, mood_text=None):
     """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。events は最近の出来事の行。
     on_did(what, yen, ate) は、返事の中で「今やった」と言った行動を受け取る。"""
     t = now()
@@ -110,6 +113,8 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
             f"【呼ばれ方】このサーバーでのあなたの表示名は {persona.NICK}。会話の中でそう呼ばれたら自分のこと")
     if body_text:
         turn += "\n【体の状態】" + body_text
+    if mood_text:
+        turn += "\n【気分】" + mood_text + "。" + MOOD_GUIDE
     turn += "\n【最近の出来事】" + ("／".join(events) or "特に無し") + "\n【行動】" + DID_GUIDE
     if note:
         turn += "\n【補足】" + note

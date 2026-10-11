@@ -13,6 +13,7 @@ from app.jev import JEV_INVITE, jev, jev_interest
 from app.learning import LearningMixin
 from app.life import LifeMixin
 from app.llm import write
+from app.mood import MoodMixin
 from app.rating import RatingMixin
 from app.snapshot import SnapshotMixin
 from app.status import StatusMixin
@@ -27,7 +28,7 @@ QUIET_SEC = 6        # 最後の発言からこれだけ静かになったら判
 MAX_WAIT_SEC = 20    # 会話が続いていても、これだけ溜めたら判断する
 
 
-class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, SnapshotMixin, discord.Client):
+class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, SnapshotMixin, discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -151,9 +152,13 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, SnapshotMixin, 
         share, humans = decide.my_share([{"author": m["author_id"], "bot": m["bot"]}
                                          for m in recent[-SHARE_WINDOW:]], self.user.id)
         interest = None
-        if not addressed and act["state"] not in ("寝ている", "バイト中", "離席中"):
-            convo = "\n".join(f"{m['author']}: {m['text']}" for m in recent[-6:])
-            interest, invite = await asyncio.gather(jev_interest(convo), jev(convo, JEV_INVITE))
+        awake = act["state"] not in ("寝ている", "バイト中", "離席中")
+        convo = "\n".join(f"{m['author']}: {m['text']}" for m in recent[-6:])
+        if awake and addressed:
+            await self.read_topic(convo)      # 話題の好き嫌いで気分を動かす
+        elif awake:
+            interest, invite, _ = await asyncio.gather(jev_interest(convo), jev(convo, JEV_INVITE),
+                                                       self.read_topic(convo))
             if invite is not None and invite >= decide.INTEREST_TRUE:
                 addressed = True       # 「誰か話そう」は自分にも向いている
                 log.info("その場の誰かへの呼びかけ（%.2f）→ 話しかけられた扱い", invite)
@@ -179,7 +184,7 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, SnapshotMixin, 
             return
         t = now()
         out = await write(list(self.recent), target, kind, act["label"], note,
-                          body_text=body.as_feelings(self.body, now()), events=self.event_lines(t), on_did=self.did)
+                          body_text=body.as_feelings(self.body, now()), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t))
         if not out:
             return
         log.info("返信先「%s」→ %s", target["text"][:60], out if kind == "reaction" else " ｜ ".join(out))

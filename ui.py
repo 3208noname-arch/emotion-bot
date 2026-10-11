@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from aiohttp import web
 
-from engine import affinity, body, decide, ratings, snapshot
+from engine import affinity, body, decide, mood, ratings, snapshot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state.json")
@@ -55,6 +55,13 @@ async def state(_):
                       "events": [{**e, "when": affinity.when(datetime.fromisoformat(e["at"]), t)}
                                  for e in reversed(p.get("events", []))]})
     likes.sort(key=lambda x: -x["v"])
+    md = None
+    if b and s.get("mood"):
+        m = json.loads(json.dumps(s["mood"]))   # 読むだけ。今の時刻まで戻した値を見せる
+        base = mood.baseline(body.felt_sleepy(b, t), b["hunger"], b["energy"], b["money"] < body.BROKE)
+        mood.settle(m, t, base)
+        md = {"v": round(m["v"]), "base": round(base), "words": mood.as_words(m, base),
+              "events": list(reversed(m["events"]))}
     c = s.get("counts", {})
     return web.json_response({
         "now": t.isoformat(timespec="seconds"), "stopped": s.get("stopped", False),
@@ -66,6 +73,7 @@ async def state(_):
         "deferred": len(s.get("deferred", [])),
         "events": list(reversed(s.get("events", []))),
         "likes": likes,
+        "mood": md,
         "names": s.get("names", {}),
     })
 

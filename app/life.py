@@ -56,7 +56,7 @@ class LifeMixin:
         if not decide.start_due(t, last_at, human_at, act["state"], self.body["energy"], st["n"], random.random()):
             return
         out = await write(list(self.recent), None, "normal", act["label"], START_NOTE,
-                          body_text=body.as_feelings(self.body, t), events=self.event_lines(t), on_did=self.did)
+                          body_text=body.as_feelings(self.body, t), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t))
         if not out:
             return
         st["n"] += 1
@@ -102,6 +102,7 @@ class LifeMixin:
             self.note_events(t, [SCHED_END[self.s["last_sched"]]])
         self.s["last_sched"] = sched
         self.note_events(t, [e for e in ev if e not in ("戻った",)])
+        self.mood_settle(t)
         if ev:
             log.info("体: %s（%s）", "・".join(ev), body.as_numbers(b, t))
         save_state(self.s)
@@ -116,7 +117,7 @@ class LifeMixin:
             log.info("体の都合（%s）: 直前に喋ったので一言は省く", say[0])
             return
         out = await write(list(self.recent), None, "short", decide.activity(t, b)["label"],
-                          ANNOUNCE[say[0]], body_text=body.as_feelings(b, t), events=self.event_lines(t), on_did=self.did)
+                          ANNOUNCE[say[0]], body_text=body.as_feelings(b, t), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t))
         if out:
             log.info("体の都合で一言（%s）→ %s", say[0], out[0])
             async with self.ch.typing():
