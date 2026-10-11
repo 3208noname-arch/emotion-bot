@@ -33,6 +33,8 @@ class LifeMixin:
         hit = decide.pickup(recent, self.user.id, t, act["state"], self.body["energy"])
         if not hit or self.s.get("picked") == hit["id"]:
             return
+        if any(d["id"] == hit["id"] for d in self.s.get("deferred", [])):
+            return       # 後で返す分に積んである（そちらから返す）
         self.s["picked"] = hit["id"]
         target = next(m for m in self.recent if m["id"] == hit["id"])
         if random.random() >= decide.PICKUP_RATE or not decide.budget_ok(self.s.setdefault("counts", {}),
@@ -116,6 +118,10 @@ class LifeMixin:
             return
         if self.last_sent_at and t - self.last_sent_at < ANNOUNCE_GAP:
             log.info("体の都合（%s）: 直前に喋ったので一言は省く", say[0])
+            return
+        if say[0] in ("戻った", "起きた") and self.s.get("deferred"):
+            # すぐ後に「後で返す」返事が出る。戻った一言が同じ発言に先に答えてしまい、二重になった（10-12）
+            log.info("体の都合（%s）: 後で返す分があるので一言は省く", say[0])
             return
         out = await write(list(self.recent), None, "short", decide.activity(t, b)["label"],
                           ANNOUNCE[say[0]], body_text=body.as_feelings(b, t), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t))

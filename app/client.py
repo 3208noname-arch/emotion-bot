@@ -26,6 +26,7 @@ RECENT = 20          # 覚えておく直近の発言数（LLMに渡す）
 SHARE_WINDOW = 12    # 発言シェアを数える範囲
 QUIET_SEC = 6        # 最後の発言からこれだけ静かになったら判断する
 MAX_WAIT_SEC = 20    # 会話が続いていても、これだけ溜めたら判断する
+ANSWERED_KEEP = 50   # 返事済みの発言IDをこれだけ覚えておく（同じ発言に二度返さない）
 
 
 class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, SnapshotMixin, discord.Client):
@@ -184,6 +185,10 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
         if not plan["addressed"] and self.last_sent_at and self.last_sent_at > plan["at"]:
             log.info("気付くまでの間に別の返事を送ったので、割り込みは捨てる")
             return
+        if target["id"] in self.s.get("answered", []):
+            # 同じ発言に、後で返す・放置を拾う・抜ける戻る一言から二重に返していた（10-12 ユーザー「1ターン2回行動してる」）
+            log.info("この発言には返事済みなので返さない（%s）", plan.get("source", "reply"))
+            return
         t = now()
         out = await write(list(self.recent), target, kind, act["label"], note,
                           body_text=body.as_feelings(self.body, now()), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t))
@@ -196,6 +201,7 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
         decide.count(self.s.setdefault("counts", {}), target["author_id"], t)
         body.spend_talk(self.body, 0 if kind == "reaction" else sum(map(len, out)), t, hot=plan.get("hot"))
         self.last_sent_at = now()
+        self.s["answered"] = (self.s.get("answered", []) + [target["id"]])[-ANSWERED_KEEP:]
         save_state(self.s)
         msg = await self.ch.fetch_message(target["id"])
         if kind == "reaction":
@@ -228,19 +234,19 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
                     t = now()
                     await self.live(t)
                     act = decide.activity(t, self.body)
-                    await self.pick_up(t, act)
-                    await self.start_topic(t, act)
+                    # 後で返す分を、放置を拾うより先に（同じ発言なら、遅れた事情を添えて返す方が自然）
                     old = self.s.get("deferred", [])
                     rest, due = decide.defer_due(old, t, act["state"])
                     if rest != old:
                         self.s["deferred"] = rest
                         save_state(self.s)
-                    if not due:
-                        continue
-                    mins = int((t - datetime.fromisoformat(due["at"])).total_seconds() // 60)
-                    note = decide.late_note(mins, due["was"], due.get("why"))
-                    log.info("後で返す: %s（%d分前・%s）", due["text"][:40], mins, due.get("why") or due["was"])
-                    await self.reply({"target": due, "addressed": True, "kind": "normal",
-                                      "act": act, "at": t, "source": "late"}, note)
+                    if due:
+                        mins = int((t - datetime.fromisoformat(due["at"])).total_seconds() // 60)
+                        note = decide.late_note(mins, due["was"], due.get("why"))
+                        log.info("後で返す: %s（%d分前・%s）", due["text"][:40], mins, due.get("why") or due["was"])
+                        await self.reply({"target": due, "addressed": True, "kind": "normal",
+                                          "act": act, "at": t, "source": "late"}, note)
+                    await self.pick_up(t, act)
+                    await self.start_topic(t, act)
             except Exception:
                 log.exception("後で返す処理に失敗")
