@@ -79,13 +79,28 @@ def line(m, t):
     return f"［{decide.ago(sec)}］{m['author']}: {m['text']}"
 
 
-# 評価で「クレーンで景品取れた」「1000円溶かした」と、起きていない出来事を話していた（10-11）
-NO_MADE_UP = ("【最近の出来事】【体の状態】に無い行動（買った・遊んだ・お金を使った・どこかへ行った）を、"
-              "今日やった事実として話さない。予定・願望・昔の話として話すのはよい")
+# 評価で「クレーンで1000円溶かした」と、起きていない出来事を話し、残高も減っていなかった（10-11）。
+# 禁じるより、言ったことを本当にやったことにする（話題を出すにも行動は要る。ユーザー）
+DID_GUIDE = ("今さっき新しく何かをした（買った・食べた・遊んだ・どこかへ行った）と話すなら、"
+             'JSONに "did": {"what": "クレーンゲーム", "yen": 使った円, "ate": 食べたなら true} を足す。'
+             "【最近の出来事】に既にあることは足さない。出来事や自分の前の発言と食い違うことは言わない")
 
 
-async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=()):
-    """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。events は最近の出来事の行。"""
+def parse_did(text):
+    """返事に添えられた「今やった行動」。無ければ None。"""
+    try:
+        d = json.loads(text).get("did")
+    except (ValueError, AttributeError):
+        return None
+    if not isinstance(d, dict) or not str(d.get("what") or "").strip():
+        return None
+    yen = str(d.get("yen") or 0).replace(",", "").replace("円", "")
+    return {"what": str(d["what"]).strip()[:30], "yen": int(yen) if yen.isdigit() else 0, "ate": d.get("ate") is True}
+
+
+async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None):
+    """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。events は最近の出来事の行。
+    on_did(what, yen, ate) は、返事の中で「今やった」と言った行動を受け取る。"""
     t = now()
     log_lines = "\n".join(line(m, t) for m in recent)
     to = (f"【返信先】\n{line(target, t)}" if target else
@@ -95,7 +110,7 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
             f"【呼ばれ方】このサーバーでのあなたの表示名は {persona.NICK}。会話の中でそう呼ばれたら自分のこと")
     if body_text:
         turn += "\n【体の状態】" + body_text
-    turn += "\n【最近の出来事】" + ("／".join(events) or "特に無し") + "\n【注意】" + NO_MADE_UP
+    turn += "\n【最近の出来事】" + ("／".join(events) or "特に無し") + "\n【行動】" + DID_GUIDE
     if note:
         turn += "\n【補足】" + note
     if kind == "reaction":
@@ -112,6 +127,9 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
             return None
         out = parse(text, kind, target_text)
         if out:
+            d = parse_did(text) if on_did and kind != "reaction" else None
+            if d:
+                on_did(**d)
             return out
         log.info("型・口調が合わない。引き直す: %r", text[:80])
     return None   # 全滅なら黙る（定型で埋めない。黙っても不自然ではない）

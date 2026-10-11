@@ -103,4 +103,16 @@ ok("眠気90/100" in B.as_numbers(b, T), "数値で渡す形")
 b = B.new(T); b["asleep"] = True; b["sleepy"] = 99
 ev = B.tick(b, T.replace(hour=22, minute=1), "ふつう", True, T.replace(hour=8))
 ok("起きた" not in ev, "夜は目覚ましが効かない（その日の8時を過ぎていても）")
+
+# 会話で言った行動
+b = B.new(T); b["money"] = 4100
+ok(B.did(b, T, "クレーンゲーム", 1000) == "クレーンゲーム（1,000円）" and b["money"] == 3100, "言った額が残高から減る")
+b = B.new(T); b["money"] = 500; b["hunger"] = 70
+ok(B.did(b, T, "ラーメン", 900, ate=True) == "ラーメン（500円）" and b["money"] == 0 and b["hunger"] == 0,
+   "食べたら空腹が戻る。残高より多くは使えない")
+b = B.new(T); b["money"] = 9000
+B.did(b, T, "服", 8000)
+ok(b["money"] == 6000, "1回の出費は上限で切る")
+b = B.new(T); b["asleep"] = True
+ok(B.did(b, T, "散歩") is None, "寝ている間は何もしない")
 print(f"ok {n}")

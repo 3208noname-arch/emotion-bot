@@ -157,6 +157,22 @@ def after_baito(b, t):
     return ["まかないを食べた"]
 
 
+DID_MAX_YEN = 3000   # 会話の中で言った出費は、1回これまで
+
+
+def did(b, t, what, yen=0, ate=False):
+    """会話の中で「今やった」と言った行動を、本当にやったことにする（10-11 ユーザー「話題を出すにも行動は要る」）。
+    寝ている間は何もしない。出費は残高と DID_MAX_YEN で切る。出来事の文を返す（やらなかったら None）。"""
+    if b["asleep"] or not what:
+        return None
+    yen = max(0, min(int(yen or 0), DID_MAX_YEN, b["money"]))
+    if ate:
+        _eat(b, yen, t)
+    else:
+        b["money"] -= yen
+    return f"{what}（{yen:,}円）" if yen else what
+
+
 def spend_talk(b, text_len, t, cold=False, hot=False, praised=False):
     """1回送ると気力が減る。眠いと減りが速い。冷たくされると減り、楽しい話題と褒めで少し戻る。"""
     cost = TALK_BASE + text_len / TALK_PER_CHARS

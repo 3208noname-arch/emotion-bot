@@ -56,7 +56,7 @@ class LifeMixin:
         if not decide.start_due(t, last_at, human_at, act["state"], self.body["energy"], st["n"], random.random()):
             return
         out = await write(list(self.recent), None, "normal", act["label"], START_NOTE,
-                          body_text=body.as_feelings(self.body, t), events=self.event_lines(t))
+                          body_text=body.as_feelings(self.body, t), events=self.event_lines(t), on_did=self.did)
         if not out:
             return
         st["n"] += 1
@@ -74,6 +74,15 @@ class LifeMixin:
     def event_lines(self, t):
         return [f"［{decide.ago((t - datetime.fromisoformat(e['at'])).total_seconds())}］{e['what']}"
                 for e in self.s.get("events", [])]
+
+    def did(self, what, yen=0, ate=False):
+        """返事の中で「今やった」と言った行動を、本当にやったことにする（出来事に残し、残高を減らす）。"""
+        t = now()
+        ev = body.did(self.body, t, what, yen, ate)
+        if ev:
+            self.note_events(t, [ev])
+            save_state(self.s)
+            log.info("会話で言った行動: %s（残高%s円）", ev, f"{self.body['money']:,}")
 
     def note_events(self, t, ev):
         """話題のネタにする最近の出来事（12時間・8件まで）。"""
@@ -107,7 +116,7 @@ class LifeMixin:
             log.info("体の都合（%s）: 直前に喋ったので一言は省く", say[0])
             return
         out = await write(list(self.recent), None, "short", decide.activity(t, b)["label"],
-                          ANNOUNCE[say[0]], body_text=body.as_feelings(b, t), events=self.event_lines(t))
+                          ANNOUNCE[say[0]], body_text=body.as_feelings(b, t), events=self.event_lines(t), on_did=self.did)
         if out:
             log.info("体の都合で一言（%s）→ %s", say[0], out[0])
             async with self.ch.typing():
