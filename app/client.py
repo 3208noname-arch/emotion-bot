@@ -179,7 +179,7 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, SnapshotMixin, 
             return
         t = now()
         out = await write(list(self.recent), target, kind, act["label"], note,
-                          body_text=body.as_feelings(self.body, now()))
+                          body_text=body.as_feelings(self.body, now()), events=self.event_lines(t))
         if not out:
             return
         log.info("返信先「%s」→ %s", target["text"][:60], out if kind == "reaction" else " ｜ ".join(out))

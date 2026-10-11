@@ -79,17 +79,23 @@ def line(m, t):
     return f"［{decide.ago(sec)}］{m['author']}: {m['text']}"
 
 
-async def write(recent, target, kind, pres, note=None, body_text=None, guide=""):
-    """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。"""
+# 評価で「クレーンで景品取れた」「1000円溶かした」と、起きていない出来事を話していた（10-11）
+NO_MADE_UP = ("【最近の出来事】【体の状態】に無い行動（買った・遊んだ・お金を使った・どこかへ行った）を、"
+              "今日やった事実として話さない。予定・願望・昔の話として話すのはよい")
+
+
+async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=()):
+    """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。events は最近の出来事の行。"""
     t = now()
     log_lines = "\n".join(line(m, t) for m in recent)
     to = (f"【返信先】\n{line(target, t)}" if target else
           "【返信先】なし。誰かの発言への返事ではない。直近の会話に答えたり、自分の発言を繰り返したりしない")
-    turn = (f"【今の時刻】{t:%H:%M}\n【直近の会話】\n{log_lines}\n\n{to}\n\n"
+    turn = (f"【今の時刻】{t:%H:%M}\n【今日】{decide.day_text(t)}\n【直近の会話】\n{log_lines}\n\n{to}\n\n"
             f"【型】{KIND_LABEL[kind]}\n【今の様子】{pres}\n"
             f"【呼ばれ方】このサーバーでのあなたの表示名は {persona.NICK}。会話の中でそう呼ばれたら自分のこと")
     if body_text:
         turn += "\n【体の状態】" + body_text
+    turn += "\n【最近の出来事】" + ("／".join(events) or "特に無し") + "\n【注意】" + NO_MADE_UP
     if note:
         turn += "\n【補足】" + note
     if kind == "reaction":

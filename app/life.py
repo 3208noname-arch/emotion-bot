@@ -55,10 +55,8 @@ class LifeMixin:
         human_at = datetime.fromisoformat(humans[-1]["at"]) if humans and humans[-1].get("at") else None
         if not decide.start_due(t, last_at, human_at, act["state"], self.body["energy"], st["n"], random.random()):
             return
-        lines = [f"［{decide.ago((t - datetime.fromisoformat(e['at'])).total_seconds())}］{e['what']}"
-                 for e in self.s.get("events", [])]
-        note = START_NOTE + ("\n【最近の出来事】" + "／".join(lines) if lines else "")
-        out = await write(list(self.recent), None, "normal", act["label"], note, body_text=body.as_feelings(self.body, t))
+        out = await write(list(self.recent), None, "normal", act["label"], START_NOTE,
+                          body_text=body.as_feelings(self.body, t), events=self.event_lines(t))
         if not out:
             return
         st["n"] += 1
@@ -72,6 +70,10 @@ class LifeMixin:
         self.remember(sent, t, act, {"source": "start", "kind": "normal"})
         self.last_sent_at = now()
         body.spend_talk(self.body, sum(map(len, out)), t)
+
+    def event_lines(self, t):
+        return [f"［{decide.ago((t - datetime.fromisoformat(e['at'])).total_seconds())}］{e['what']}"
+                for e in self.s.get("events", [])]
 
     def note_events(self, t, ev):
         """話題のネタにする最近の出来事（12時間・8件まで）。"""
@@ -105,7 +107,7 @@ class LifeMixin:
             log.info("体の都合（%s）: 直前に喋ったので一言は省く", say[0])
             return
         out = await write(list(self.recent), None, "short", decide.activity(t, b)["label"],
-                          ANNOUNCE[say[0]], body_text=body.as_feelings(b, t))
+                          ANNOUNCE[say[0]], body_text=body.as_feelings(b, t), events=self.event_lines(t))
         if out:
             log.info("体の都合で一言（%s）→ %s", say[0], out[0])
             async with self.ch.typing():

@@ -111,6 +111,27 @@ def day_key(t):
     return (t - timedelta(hours=4)).date().isoformat()
 
 
+WDAY = "月火水木金土日"
+
+
+def _plan(d):
+    """その日の予定を1行で。"""
+    items = [f"{s:%H:%M}〜{e:%H:%M} {name}" for s, e, name in TIMETABLE.get(d.weekday(), [])]
+    if d.weekday() in BAITO_DAYS:
+        items.append(f"{BAITO[0]:%H:%M}〜24:00 バイト")
+    return "、".join(items) or "授業もバイトも無い"
+
+
+def day_text(t):
+    """LLMに渡す日付と予定。**時刻だけだと、土日に1限の話をし、昼の「おはよう」を朝と取り違えた。**
+    朝4時までは前日の夜として扱う（day_key と同じ区切り）。"""
+    d = t - timedelta(hours=4)
+    nxt = d + timedelta(days=1)
+    night = "の深夜" if t.hour < 4 else ""
+    return (f"{d.month}月{d.day}日（{WDAY[d.weekday()]}）{night}。今日の予定: {_plan(d)}／"
+            f"明日（{WDAY[nxt.weekday()]}）: {_plan(nxt)}")
+
+
 def budget_ok(counts, user_id, t):
     """上限の内側か。counts = {"day": "...", "total": n, "users": {id: n}}"""
     if counts.get("day") != day_key(t):
