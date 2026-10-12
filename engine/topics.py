@@ -4,10 +4,12 @@
 - 新しい話題は「自分で覚えた」印（source: learned）を付けて足す。快は言った向き、覚醒は 0.5 から
 - 既にある覚えた話題は、言うたびに快を少し寄せる（1回で全部は動かさない）
 - **人が置いた話題（source が無い）は書き換えない**
-- 覚えた話題は LEARNED_MAX 件まで。超えたら一番古く言ったものから消す（話題が増えるほどJevへの問いが増えるため）
+- **覚えた話題は消さない**（10-12 ユーザー「消すわけにもいかない。参照しないだけで増えるだけ増えて、話題が出たら引っ張り出せばいい」）。
+  使うのは active で選んだ分だけ: 人が置いた話題すべて＋会話に名前が出た覚えた話題＋最近言った覚えた話題 RECENT_N 件。
+  残りは眠らせておき、Jevにも LLM にも渡さない（話題が増えるほどJevへの問いが増えるため）
 """
 
-LEARNED_MAX = 20
+RECENT_N = 10
 PULL = 0.3            # 既にある覚えた話題を、言った向きへ寄せる割合
 NEW_AROUSAL = 0.5
 SHOW_FROM = 0.2       # 快がこれ以上離れている話題だけ、LLMに「好き・嫌い」として渡す
@@ -36,10 +38,20 @@ def learn(topics, name, like, at):
         return "moved"
     topics.append({"name": name, "valence": round(like, 2), "arousal": NEW_AROUSAL,
                    "note": "会話で言った", "source": "learned", "at": at})
-    learned = sorted((t for t in topics if t.get("source") == "learned"), key=lambda t: t["at"])
-    for old in learned[:max(0, len(learned) - LEARNED_MAX)]:
-        topics.remove(old)
     return "added"
+
+
+def mentioned(t, text):
+    """話題の名前（「ピーマン・ナス」なら各部分）が会話に出ているか。"""
+    text = text.casefold()
+    return any(p and p.casefold() in text for p in t["name"].replace("／", "・").split("・"))
+
+
+def active(topics, text):
+    """今使う話題。人が置いた話題すべて＋会話に名前が出た覚えた話題＋最近言った覚えた話題。"""
+    learned = [t for t in topics if t.get("source") == "learned"]
+    recent = {id(t) for t in sorted(learned, key=lambda t: t.get("at", ""), reverse=True)[:RECENT_N]}
+    return [t for t in topics if t.get("source") != "learned" or id(t) in recent or mentioned(t, text)]
 
 
 def as_words(topics):

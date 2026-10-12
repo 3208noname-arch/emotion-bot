@@ -51,8 +51,11 @@ class MoodMixin:
         if d:
             log.info("気分: %s %+.1f → %.0f（%s）", why, d, self.mood["v"], mood.band(self.mood["v"]))
 
+    def recent_text(self):
+        return "\n".join(m["text"] for m in list(self.recent)[-6:])
+
     def taste_words(self):
-        return topics.as_words(load_topics())
+        return topics.as_words(topics.active(load_topics(), self.recent_text()))
 
     def taste(self, name, like):
         """返事の中で口にした好き嫌いを、話題の図に覚える（人が置いた話題は書き換えない）。"""
@@ -67,7 +70,7 @@ class MoodMixin:
 
     async def read_topic(self, convo):
         """会話の最後の発言がどの話題かをJevで読み、好き嫌い（快）で気分を動かす。"""
-        tps = load_topics()
+        tps = topics.active(load_topics(), convo)
         if not tps:
             return
         qs = {tp["name"]: f"会話の最後の発言は「{tp['name']}」についての話か。" for tp in tps}

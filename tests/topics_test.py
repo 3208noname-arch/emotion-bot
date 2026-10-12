@@ -23,10 +23,14 @@ ok(P.learn(ts, "「ピーマン」", 5, "x") == "added" and ts[-1]["name"] == "�
 ok(P.learn(ts, "", 0.5, "x") is None and P.learn(ts, "a" * 21, 0.5, "x") is None, "名前は1〜20文字")
 ok(P.learn(ts, "銭湯", "好き", "x") is None, "快が数でなければ何もしない")
 
-ts = []
-for i in range(P.LEARNED_MAX + 2):
+ts = [{"name": "虫", "valence": -0.8, "arousal": 0.9}]
+for i in range(P.RECENT_N + 5):
     P.learn(ts, f"話題{i}", 0.5, f"2026-10-12T10:{i:02d}:00")
-ok(len(ts) == P.LEARNED_MAX and ts[0]["name"] == "話題2", "上限を超えたら古いものから消す")
+ok(len(ts) == P.RECENT_N + 6, "覚えた話題は消さない")
+names = [t["name"] for t in P.active(ts, "")]
+ok(len(names) == P.RECENT_N + 1 and "虫" in names and "話題0" not in names, "人が置いた話題と、最近言った分だけ使う")
+ok("話題0" in [t["name"] for t in P.active(ts, "そういえば話題0ってさ")], "会話に名前が出たら引っ張り出す")
+ok(P.mentioned({"name": "ピーマン・ナス"}, "ナス嫌い"), "「・」で区切った一部でも出たとみなす")
 
 ts = [{"name": "まかない", "valence": 0.8, "arousal": 0.7}, {"name": "政治", "valence": -0.1, "arousal": 0.1},
       {"name": "虫", "valence": -0.8, "arousal": 0.9}]

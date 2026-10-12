@@ -123,7 +123,7 @@ async def log_tail(req):
 
 def check_topics(items):
     """座標の表を検める。おかしければ理由の文字列、良ければ整えた表を返す。"""
-    if not isinstance(items, list) or len(items) > 200:
+    if not isinstance(items, list) or len(items) > 2000:   # 覚えた話題は消さないので多めに
         return "表の形がおかしい"
     seen, out = set(), []
     for it in items:
