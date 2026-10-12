@@ -40,7 +40,9 @@ LIKE_QS = {"attack": "発言者は【相手】を本気でけなしている、�
            "support": "発言者は【相手】を本心から庇っている、褒めている、または気にかけているか"
                       "（冗談の前振り・お世辞・皮肉は含めない）。",
            "joke": "発言者は【相手】に、冗談・ボケ・ノリで言っているか"
-                   "（わざと怪しい話を持ちかける、罠にかける前振りも含む。その後の会話で冗談だと分かるものも含む）。"}
+                   "（わざと怪しい話を持ちかける、罠にかける前振りも含む。その後の会話で冗談だと分かるものも含む）。",
+           "belittle": "発言者は【相手】を見下したり、子ども扱い・バカ扱いしたりしているか"
+                       "（ふざけた調子や「かわいい」を添えた言い方でも含む）。"}
 LIKE_ME_Q = "発言者は、この会話の中でナギ（N4Gi）のことを本心から庇っている、褒めている、または気にかけているか。"
 FLOW_GAP = 300   # 返信もメンションも無い発言でも、ナギの発言からこの秒数以内に続いたものはナギ宛てとみなす
 
@@ -124,7 +126,7 @@ class LearningMixin:
                 return
             author = affinity.get(store, m.author.id, m.author.display_name, t)
             quote = m.clean_content
-            kind = affinity.judge(p.get("attack"), p.get("tease"), p.get("support"), p.get("joke"))
+            kind = affinity.judge(p.get("attack"), p.get("tease"), p.get("support"), p.get("joke"), p.get("belittle"))
             name = m.author.display_name
             if me:
                 d = affinity.apply(author, affinity.DELTA[(kind, "me")], t, f"ナギに{kind}", quote) if kind else 0

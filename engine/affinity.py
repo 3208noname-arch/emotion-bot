@@ -10,6 +10,8 @@
   かきの「いいバイトがあるんだけど紹介しよっか？」は、直後の1件だけ見て「褒めた」+6 になった。
   闇バイトの誘いの冗談だと分かるのは、その後の流れだった
 - 冗談・ボケ（罠の前振りを含む）は +2（一緒にふざけられる相手。ユーザーが +2 を選んだ）
+- 見下し・子ども扱いは −3（10-12 ユーザー「ガキ扱いはいじりというより貶し」）。ふざけた調子でも下げる。
+  本気のけなし（−8）よりは軽い。かきの「かわいい、おこちゃまだ」は いじり0.76・けなし0.31 で ±0 になっていた
 """
 from datetime import datetime, timedelta
 
@@ -26,7 +28,8 @@ KEEP_N = 10
 BANDS = [(50, "仲いい"), (15, "好き"), (-14, "ふつう"), (-49, "気まずい"), (-100, "苦手")]
 
 # 起きたこと → 増減。「me」はナギ自身への言動、「friend」「close」はナギが好き／仲いい相手への言動
-DELTA = {("attack", "me"): -8, ("support", "me"): 6, ("joke", "me"): 2,
+DELTA = {("attack", "me"): -8, ("support", "me"): 6, ("joke", "me"): 2, ("belittle", "me"): -3,
+         ("belittle", "close"): -3, ("belittle", "friend"): -1,
          ("attack", "close"): -8, ("support", "close"): 4,
          ("attack", "friend"): -4, ("support", "friend"): 2}
 
@@ -48,16 +51,19 @@ def get(store, uid, display, t):
     return p
 
 
-def judge(attack, tease, support, joke=None):
+def judge(attack, tease, support, joke=None, belittle=None):
     """Jev の確率から、起きたことを1つに決める。どれも当たらなければ None。失敗（None）は当たらない扱い。
-    冗談なら、褒め言葉の形でも本心の褒めとは読まない（「偉すぎ。いいバイトがあるんだけど」は前振り）。"""
+    冗談なら、褒め言葉の形でも本心の褒めとは読まない（「偉すぎ。いいバイトがあるんだけど」は前振り）。
+    見下し・子ども扱いは、いじりの調子でも見下しと読む（冗談・ボケと読めるなら冗談を採る）。"""
     playful = max(tease or 0, joke or 0) >= TEASE_MAX
     if joke is not None and joke >= TRUE:
         return "joke"
-    if support is not None and support >= TRUE and not playful:
-        return "support"
     if attack is not None and attack >= TRUE and not playful:
         return "attack"
+    if belittle is not None and belittle >= TRUE:
+        return "belittle"
+    if support is not None and support >= TRUE and not playful:
+        return "support"
     return None
 
 

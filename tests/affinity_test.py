@@ -23,6 +23,10 @@ ok(A.judge(0.1, 0.3, 0.9, 0.9) == "joke", "褒め言葉の形でも、冗談の�
 ok(A.judge(0.1, 0.6, 0.9, 0.2) is None, "いじり混じりの褒めは本心と読まない")
 ok(A.judge(0.1, 0.1, 0.9, 0.2) == "support", "冗談でなければ褒め")
 ok(A.DELTA[("joke", "me")] == 2, "冗談は+2")
+ok(A.judge(0.31, 0.76, 0.1, 0.32, 0.93) == "belittle" and A.DELTA[("belittle", "me")] == -3,
+   "いじりの調子でも、子ども扱いは見下し（-3）")
+ok(A.judge(0.03, 0.9, 0.39, 0.83, 0.37) == "joke", "冗談と読めるなら冗談")
+ok(A.judge(0.9, 0.2, 0.1, 0.1, 0.9) == "attack", "本気のけなしは見下しより重い方")
 ok(not A.ripe(3, timedelta(minutes=2)) and A.ripe(6, timedelta(0)) and A.ripe(0, timedelta(minutes=10)),
    "6件続くか10分経ったら読む")
 

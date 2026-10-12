@@ -51,4 +51,12 @@ ok(M.as_words(m, 0) == "ちょっと機嫌が悪い（鴉羽にけなされた�
 m = M.new(T); m["v"] = -20
 ok(M.as_words(m, -15) == "ちょっと機嫌が悪い（体がしんどい）", "出来事が無ければ体のせい")
 ok(M.as_words(M.new(T), 0) == "ふつう", "ふつうは理由を付けない")
+# 推移
+h = M.record([], T, 5)
+h = M.record(h, T + timedelta(minutes=3), 9)
+ok(h == [[T.isoformat(timespec="minutes"), 5]], "10分たつまで次の点を打たない")
+h = M.record(h, T + timedelta(minutes=10), -3)
+ok(len(h) == 2 and h[-1][1] == -3, "10分ごとに残す")
+h = M.record(h, T + timedelta(hours=49), 0)
+ok(len(h) == 1, "48時間より古い点は捨てる")
 print(f"ok {n}")

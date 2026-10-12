@@ -61,7 +61,7 @@ async def state(_):
         base = mood.baseline(body.felt_sleepy(b, t), b["hunger"], b["energy"], b["money"] < body.BROKE)
         mood.settle(m, t, base)
         md = {"v": round(m["v"]), "base": round(base), "words": mood.as_words(m, base),
-              "events": list(reversed(m["events"]))}
+              "events": list(reversed(m["events"])), "hist": s.get("mood_hist", [])}
     c = s.get("counts", {})
     return web.json_response({
         "now": t.isoformat(timespec="seconds"), "stopped": s.get("stopped", False),
@@ -196,7 +196,7 @@ MECHS = [
     {"name": "口にした好き嫌いを覚える", "status": "on", "since": "0.10.0",
      "does": "会話で言った好き嫌いを話題の図に足す（白抜きの点）。消さずに眠らせ、話題が出たら使う", "value": "learned"},
     {"name": "好感度", "status": "on", "since": "0.9.0",
-     "does": "けなし・庇い・冗談を前後6件の会話で判定して数える（0.9.9〜）。話しかけられた時の気分の動きに使う（0.9.8〜）。"
+     "does": "けなし・庇い・冗談・見下し（0.10.2〜）を前後6件の会話で判定して数える（0.9.9〜）。話しかけられた時の気分の動きに使う（0.9.8〜）。"
              "**態度・口調にはまだ効かない**", "value": "likes"},
     {"name": "呼び名", "status": "count", "since": "0.6.0",
      "does": "誰が誰をどう呼ぶかを集める。会話にはまだ使わない", "value": "names"},

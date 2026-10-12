@@ -51,6 +51,8 @@ a{color:var(--acc)}
   <div class="card"><div class="row"><div class="v" id="act"></div><span id="run" class="mute"></span></div>
     <div class="mute" id="feel"></div><div class="mute" id="moodWords"></div></div>
   <div class="grid card" id="bodyGrid"></div>
+  <div class="card"><div class="k">快・不快（気分）の推移。上が快、下が不快。直近24時間、10分ごと</div>
+    <svg id="moodPlot" viewBox="0 0 640 180" style="width:100%;height:auto"></svg></div>
   <div class="card"><div class="k">気分を動かした出来事（直近6時間）</div><table id="moodEvents"></table></div>
   <div class="card"><div class="k">直近12時間の出来事（話題のネタ）</div><table id="events"></table></div>
 </section>
@@ -111,6 +113,7 @@ async function loadState() {
     + `<div><div class="k">残高</div><div class="v">${b.money.toLocaleString()}円</div></div>` : "体の記録なし";
   const md = s.mood;
   $("#moodWords").textContent = md ? `気分: ${md.words}（${sign(md.v)}／体で決まる基準 ${sign(md.base)}）` : "気分: まだ記録なし";
+  drawMood(md);
   $("#moodEvents").innerHTML = md && md.events.length ? md.events.map(e => `<tr><td class="mute">${esc(e.at.slice(11, 16))}</td><td>${esc(e.why)}</td><td class="${e.delta > 0 ? "pos" : "neg"}">${sign(e.delta)}</td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
   $("#events").innerHTML = s.events.length ? s.events.map(e => `<tr><td class="mute">${esc(e.at.slice(11, 16))}</td><td>${esc(e.what)}</td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
   $("#likeList").innerHTML = s.likes.length ? s.likes.map(p => `<details class="card" style="margin:8px 0">
@@ -136,6 +139,25 @@ function showLog() {
   const lines = logLines.filter(l => !l.includes("RESUMED") && (!f || l.includes(f)))
     .map(l => l.replace(/^\S+ \S+ python\[\d+\]: \S+ /, ""));
   $("#logBox").textContent = lines.reverse().join("\n");
+}
+function drawMood(md) {
+  const W = 640, H = 180, L = 34, R = 8, T = 10, B = 22, now = Date.now(), span = 24 * 3600e3;
+  const sx = t => L + (W - L - R) * (1 - (now - t) / span), sy = v => T + (H - T - B) * (1 - (v + 100) / 200);
+  const pts = (md ? md.hist : []).map(([at, v]) => [new Date(at).getTime(), v]).filter(([t]) => now - t <= span);
+  let s = [100, 50, 0, -50, -100].map(v => `<line x1="${L}" x2="${W - R}" y1="${sy(v)}" y2="${sy(v)}" stroke="currentColor" opacity="${v ? .08 : .3}"/>
+    <text x="${L - 4}" y="${sy(v) + 4}" text-anchor="end" font-size="11" fill="var(--mute)">${v > 0 ? "+" + v : v}</text>`).join("");
+  for (let h = 0; h <= 24; h += 6) s += `<text x="${sx(now - h * 3600e3)}" y="${H - 4}" text-anchor="middle" font-size="11" fill="var(--mute)">${h ? h + "時間前" : "今"}</text>`;
+  if (pts.length > 1) {
+    const line = pts.map(([t, v]) => `${sx(t).toFixed(1)},${sy(v).toFixed(1)}`).join(" ");
+    s += `<polygon points="${sx(pts[0][0])},${sy(0)} ${line} ${sx(pts[pts.length - 1][0])},${sy(0)}" fill="var(--acc)" opacity=".12"/>
+      <polyline points="${line}" fill="none" stroke="var(--acc)" stroke-width="2"/>`;
+  }
+  for (const e of md ? md.events : []) {
+    const t = new Date(e.at).getTime();
+    if (now - t <= span) s += `<circle cx="${sx(t)}" cy="${sy(0)}" r="4" fill="${e.delta > 0 ? "var(--pos)" : "var(--neg)"}"><title>${esc(e.at.slice(11, 16) + " " + e.why + " " + sign(e.delta))}</title></circle>`;
+  }
+  if (pts.length < 2) s += `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="var(--mute)">記録が溜まるまで待ってね（10分ごとに1点）</text>`;
+  $("#moodPlot").innerHTML = s;
 }
 const MECH_LABEL = {on: ["使用中", "var(--pos)"], count: ["数えるだけ", "var(--warn)"], todo: ["未実装", "var(--mute)"]};
 async function loadMechs() {

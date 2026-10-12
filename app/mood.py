@@ -37,6 +37,7 @@ class MoodMixin:
     def mood_settle(self, t):
         base = self.mood_base(t)
         mood.settle(self.mood, t, base)
+        self.s["mood_hist"] = mood.record(self.s.get("mood_hist", []), t, self.mood["v"])
         return base
 
     def mood_words(self, t):
@@ -73,7 +74,9 @@ class MoodMixin:
         tps = topics.active(load_topics(), convo)
         if not tps:
             return
-        qs = {tp["name"]: f"会話の最後の発言は「{tp['name']}」についての話か。" for tp in tps}
+        # 「害虫は害虫としかつるめない」（人のたとえ）で「虫の話」と読んでいた（10-12）
+        qs = {tp["name"]: f"会話の最後の発言は「{tp['name']}」そのものについての話か"
+                          f"（人や物事を{tp['name']}にたとえる比喩は含めない）。" for tp in tps}
         hit = mood.topic_hit(await jev_many(convo, qs), tps)
         if not hit:
             return

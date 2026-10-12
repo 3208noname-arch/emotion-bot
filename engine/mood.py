@@ -19,7 +19,8 @@ BODY_GAIN = 0.6
 BROKE_PENALTY = 5
 
 # 人 → 一時的な上下
-PEOPLE = {("attack", "me"): -15, ("support", "me"): 8, ("joke", "me"): 3,
+PEOPLE = {("attack", "me"): -15, ("support", "me"): 8, ("joke", "me"): 3, ("belittle", "me"): -6,
+          ("belittle", "close"): -4, ("belittle", "friend"): -2,
           ("attack", "close"): -8, ("support", "close"): 3,
           ("attack", "friend"): -4, ("support", "friend"): 2}
 CHAT_PER_LIKE = 1 / 20          # 話しかけられた時: 好感度20で+1、60で+3、−40で−2
@@ -64,7 +65,8 @@ def people_delta(kind, rel):
     return PEOPLE.get((kind, rel), 0)
 
 
-REASON = {"attack": "{who}にけなされた", "support": "{who}に庇われた", "joke": "{who}の冗談で笑った"}
+REASON = {"attack": "{who}にけなされた", "support": "{who}に庇われた", "joke": "{who}の冗談で笑った",
+          "belittle": "{who}に見下された"}
 
 
 def people_reason(kind, who, by=None):
@@ -89,6 +91,18 @@ def topic_hit(probs, topics):
         if best is None or abs(d) > abs(best[1]):
             best = (tp["name"], d)
     return best
+
+
+HIST_EVERY_MIN = 10
+HIST_KEEP = timedelta(hours=48)
+
+
+def record(hist, t, v):
+    """気分の推移を HIST_EVERY_MIN 分ごとに1点残す（Web UI のグラフ用）。"""
+    if hist and t - datetime.fromisoformat(hist[-1][0]) < timedelta(minutes=HIST_EVERY_MIN):
+        return hist
+    hist.append([t.isoformat(timespec="minutes"), round(v, 1)])
+    return [h for h in hist if t - datetime.fromisoformat(h[0]) <= HIST_KEEP]
 
 
 def band(v):
