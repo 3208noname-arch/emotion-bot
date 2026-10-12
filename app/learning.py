@@ -44,7 +44,12 @@ LIKE_QS = {"attack": "発言者は【相手】を本気でけなしている、�
            "belittle": "発言者は【相手】を見下したり、子ども扱い・バカ扱いしたりしているか"
                        "（ふざけた調子や「かわいい」を添えた言い方でも含む）。"}
 LIKE_ME_Q = "発言者は、この会話の中でナギ（N4Gi）のことを本心から庇っている、褒めている、または気にかけているか。"
-FLOW_GAP = 300   # 返信もメンションも無い発言でも、ナギの発言からこの秒数以内に続いたものはナギ宛てとみなす
+# 返信もメンションも無い発言でも、直前 FLOW_LOOK 件にナギの発言か名前が FLOW_GAP 秒以内にあれば候補に積み、
+# 読む時に「ナギに向けた・ナギのことを言った発言か」も聞く（大人数の会話では返信を付けずに言うことが多い。
+# ポン酢の「やーいガキ」が漏れていた。10-12）
+FLOW_GAP = 300
+FLOW_LOOK = 4
+ABOUT_ME_Q = "【判定する発言】は、ナギ（N4Gi）に向けた、またはナギのことを言った発言か（ナギ以外の人どうしのやりとりなら含めない）。"
 
 
 class LearningMixin:
@@ -80,10 +85,11 @@ class LearningMixin:
                   next((u for u in m.mentions if u != m.author), None))
         named = bool(persona.NAMES.search(m.content))
         recent = list(self.recent)
-        prev = recent[-2] if len(recent) >= 2 else None
-        if target is None and (named or (prev and prev["author_id"] == self.user.id and prev.get("at") and
-                                         (now() - datetime.fromisoformat(prev["at"])).total_seconds() < FLOW_GAP)):
-            target = self.user          # 名前を呼んだ、またはナギの発言に続けて言った
+        guess = False
+        if target is None and named:
+            target = self.user          # 名前を呼んだ
+        elif target is None and self.nagi_nearby(recent[-FLOW_LOOK - 1:-1]):
+            target, guess = self.user, True   # 宛先は読む時にJevで確かめる
         if target is None or target == m.author or (target.bot and target != self.user):
             return
         me = target == self.user
@@ -91,8 +97,14 @@ class LearningMixin:
             v = self.s.get("likes", {}).get(str(target.id), {}).get("v", affinity.INITIAL)
             if affinity.relation(v) is None:
                 return          # ナギが特に好きでない相手どうしのやりとりは見ない（Jevも呼ばない）
-        self.like_queue.append({"m": m, "target": target, "me": me, "named": named, "at": now(),
+        self.like_queue.append({"m": m, "target": target, "me": me, "named": named, "guess": guess, "at": now(),
                                 "before": recent[-7:-1]})
+
+    def nagi_nearby(self, msgs):
+        """直前の発言に、少し前のナギの発言か、ナギの名前があるか。"""
+        t = now()
+        return any(x.get("at") and (t - datetime.fromisoformat(x["at"])).total_seconds() < FLOW_GAP and
+                   (x["author_id"] == self.user.id or persona.NAMES.search(x["text"])) for x in msgs)
 
     async def flush_likes(self):
         """判定待ちのうち、後ろに AFTER_N 件続いたか AFTER_WAIT 経ったものを読む。"""
@@ -119,11 +131,15 @@ class LearningMixin:
             qs = dict(LIKE_QS)
             if named and not me:
                 qs["me"] = LIKE_ME_Q
+            if q.get("guess"):
+                qs["about_me"] = ABOUT_ME_Q
             p = await jev_many(f"【発言者】{m.author.display_name}\n【相手】{who}\n【直前の会話】\n{fmt(q['before'])}\n"
                                f"【判定する発言】\n{m.author.display_name}: {m.clean_content}\n"
                                f"【その後の会話】\n{fmt(after)}", qs)
             if not p:
                 return
+            if q.get("guess") and p.get("about_me", 0) < affinity.TRUE:
+                return          # ナギ宛てではなかった（人どうしのやりとり）
             author = affinity.get(store, m.author.id, m.author.display_name, t)
             quote = m.clean_content
             kind = affinity.judge(p.get("attack"), p.get("tease"), p.get("support"), p.get("joke"), p.get("belittle"))
