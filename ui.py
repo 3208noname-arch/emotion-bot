@@ -178,6 +178,67 @@ async def info(_):
                               "services": [await service(n) for n in SERVICES]})
 
 
+# 仕組みの一覧（10-12 ユーザー「どこまで入っていて、どこがまだかを見られるUI」）。
+# **仕組みを足したり効かせ方を変えたら、ここも直す**（説明文が古いまま残る事故が一度あった）。
+# status: on（使っている）／count（数えるだけ。会話や行動にはまだ効かない）／todo（まだ作っていない）
+MECHS = [
+    {"name": "体（眠気・空腹・気力・残高）", "status": "on", "since": "0.5.0",
+     "does": "寝る・起きる・食べる・抜けるを自分で選ぶ。体の感じを言葉でLLMに渡す", "value": "body"},
+    {"name": "曜日と今日・明日の予定", "status": "on", "since": "0.9.6",
+     "does": "LLMに日付・曜日・授業とバイトの予定を渡す（土日に1限の話をしない）", "value": "today"},
+    {"name": "会話で言った行動", "status": "on", "since": "0.9.7",
+     "does": "「今やった」と言ったことを出来事に残し、残高から引く", "value": "events"},
+    {"name": "居心地（気分）", "status": "on", "since": "0.9.8",
+     "does": "体・人・話題で動き、1時間で半分ずつ基準へ戻る。LLMに言葉で渡し、口調ににじませる。"
+             "**返す・黙るの選び方にはまだ効かない**", "value": "mood"},
+    {"name": "話題の快（好き嫌い）", "status": "on", "since": "0.9.8",
+     "does": "話題が会話に出ると、快の向きに気分を動かす。好き嫌いをLLMに渡す（0.10.0〜）", "value": "topics"},
+    {"name": "口にした好き嫌いを覚える", "status": "on", "since": "0.10.0",
+     "does": "会話で言った好き嫌いを話題の図に足す（白抜きの点）。消さずに眠らせ、話題が出たら使う", "value": "learned"},
+    {"name": "好感度", "status": "on", "since": "0.9.0",
+     "does": "けなし・庇い・冗談を前後6件の会話で判定して数える（0.9.9〜）。話しかけられた時の気分の動きに使う（0.9.8〜）。"
+             "**態度・口調にはまだ効かない**", "value": "likes"},
+    {"name": "呼び名", "status": "count", "since": "0.6.0",
+     "does": "誰が誰をどう呼ぶかを集める。会話にはまだ使わない", "value": "names"},
+    {"name": "話題の覚醒（乗りやすさ）", "status": "todo", "since": None,
+     "does": "混ざるかどうか・反応の速さに効かせる予定。今は「大学生の身近な話題か」の判定で決めている", "value": None},
+    {"name": "経験で話題の図を育てる", "status": "todo", "since": None,
+     "does": "混ざったか素通りしたかで覚醒を、話題の後の気分で快を動かす（覚えた好き嫌いの2段目）", "value": None},
+    {"name": "嫌いな話題は1回目は断る", "status": "todo", "since": None,
+     "does": "嫌いな話題を振られたらまず断る。続けられたら好感度を下げる", "value": None},
+    {"name": "好感度を「居心地の予想」にする", "status": "todo", "since": None,
+     "does": "その人といると居心地がどうなるかの予想として、予想より良ければ上げる。親しいほど下がりにくい", "value": None},
+    {"name": "行動を居心地の予想で選ぶ", "status": "todo", "since": None,
+     "does": "返す・黙る・話題を変える・絡みに行く・抜けるを、居心地が上がりそうな方で選ぶ（今は手書きの確率表）",
+     "value": None},
+]
+
+
+async def mechs(_):
+    """仕組みの一覧と、それぞれの今の値。"""
+    s, t = load(STATE, {}), now()
+    b, tps = s.get("body"), load(TOPICS, {"topics": []})["topics"]
+    learned = [x for x in tps if x.get("source") == "learned"]
+    m = s.get("mood")
+    if m and b:
+        m = json.loads(json.dumps(m))
+        base = mood.baseline(body.felt_sleepy(b, t), b["hunger"], b["energy"], b["money"] < body.BROKE)
+        mood.settle(m, t, base)
+    likes = s.get("likes", {})
+    vals = {
+        "body": b and body.as_feelings(b, t) + f"・残高{b['money']:,}円",
+        "today": decide.day_text(t),
+        "events": "／".join(e["what"] for e in s.get("events", [])[-3:]) or "無し",
+        "mood": m and b and f"{mood.as_words(m, base)}（{round(m['v']):+d}）",
+        "topics": f"{len(tps) - len(learned)}件（人が置いた分）",
+        "learned": f"{len(learned)}件" + (f"（最近: {learned[-1]['name']}）" if learned else ""),
+        "likes": f"{len(likes)}人・" + "、".join(f"{p['display']}{round(p['v']):+d}" for p in
+                                                  sorted(likes.values(), key=lambda p: -p["v"])[:3]),
+        "names": f"{len(s.get('names', {}))}人分",
+    }
+    return web.json_response({"items": [{**x, "now": vals.get(x["value"]) if x["value"] else None} for x in MECHS]})
+
+
 async def index(_):
     return web.FileResponse(os.path.join(HERE, "web", "ui.html"))
 
@@ -185,7 +246,7 @@ async def index(_):
 def app():
     a = web.Application()
     a.add_routes([web.get("/", index), web.get("/api/state", state), web.get("/api/ratings", rating_list),
-                  web.get("/api/log", log_tail), web.get("/api/info", info), web.get("/api/topics", topics_get), web.put("/api/topics", topics_put)])
+                  web.get("/api/log", log_tail), web.get("/api/info", info), web.get("/api/mechs", mechs), web.get("/api/topics", topics_get), web.put("/api/topics", topics_put)])
     return a
 
 

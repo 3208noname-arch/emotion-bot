@@ -43,7 +43,7 @@ a{color:var(--acc)}
   <nav id="tabs">
     <button data-t="state" class="on">様子</button><button data-t="topics">話題の好き嫌い</button>
     <button data-t="likes">好感度</button><button data-t="names">呼び名</button>
-    <button data-t="ratings">評価</button><button data-t="log">ログ</button><button data-t="info">情報</button>
+    <button data-t="ratings">評価</button><button data-t="log">ログ</button><button data-t="mechs">仕組み</button><button data-t="info">情報</button>
   </nav>
 </header>
 <main>
@@ -71,11 +71,12 @@ a{color:var(--acc)}
   </div>
 </section>
 
-<section id="likes"><div class="card"><div class="k">好感度（−100〜+100、最初は+20）。名前を押すと出来事が出ます。今は数えるだけで、態度には効いていません。</div><div id="likeList"></div></div></section>
+<section id="likes"><div class="card"><div class="k">好感度（−100〜+100、最初は+20）。名前を押すと出来事が出ます。話しかけられた時の気分の動きには使っています（0.9.8〜）が、態度・口調にはまだ効いていません。</div><div id="likeList"></div></div></section>
 <section id="names"><div class="card"><div class="k">集まった呼び名（2人以上から合わせて3回で採用）</div><table id="nameTable"></table></div></section>
 <section id="ratings"><div class="card"><pre id="rsum"></pre></div><div class="card"><table id="rtable"></table></div></section>
 <section id="log"><div class="card"><div class="row" style="margin-bottom:8px"><button class="btn ghost" id="reloadLog">再読み込み</button>
   <input id="logFilter" placeholder="絞り込み（例: 判断 / 好感度 / 拾う）" style="max-width:320px"></div><pre id="logBox"></pre></div></section>
+<section id="mechs"><div class="card"><div class="k">ナギの感情の仕組みが、今どこまで入っているか。<b class="pos">使用中</b>＝会話や行動に効いている／<b style="color:var(--warn)">数えるだけ</b>＝記録しているが、まだ効かせていない／<span class="mute">未実装</span>＝設計だけ</div><table id="mechTable"></table></div></section>
 <section id="info">
   <div class="card"><div class="k">動いているもの</div><table id="svc"></table></div>
   <div id="linkCards"></div>
@@ -95,6 +96,7 @@ document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
   if (b.dataset.t === "ratings") loadRatings();
   if (b.dataset.t === "log") loadLog();
   if (b.dataset.t === "info") loadInfo();
+  if (b.dataset.t === "mechs") loadMechs();
 });
 
 async function loadState() {
@@ -134,6 +136,17 @@ function showLog() {
   const lines = logLines.filter(l => !l.includes("RESUMED") && (!f || l.includes(f)))
     .map(l => l.replace(/^\S+ \S+ python\[\d+\]: \S+ /, ""));
   $("#logBox").textContent = lines.reverse().join("\n");
+}
+const MECH_LABEL = {on: ["使用中", "var(--pos)"], count: ["数えるだけ", "var(--warn)"], todo: ["未実装", "var(--mute)"]};
+async function loadMechs() {
+  const d = await (await fetch("api/mechs")).json();
+  const bold = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  $("#mechTable").innerHTML = "<tr><th>仕組み</th><th>状態</th><th>何に効くか</th><th>今の値</th></tr>" + d.items.map(x => {
+    const [lab, col] = MECH_LABEL[x.status];
+    return `<tr><td><b>${esc(x.name)}</b>${x.since ? `<div class="mute">${esc(x.since)}〜</div>` : ""}</td>
+      <td style="color:${col};white-space:nowrap;font-weight:600">${lab}</td><td>${bold(x.does)}</td>
+      <td class="mute">${x.now ? esc(x.now) : "—"}</td></tr>`;
+  }).join("");
 }
 async function loadInfo() {
   const d = await (await fetch("api/info")).json();
