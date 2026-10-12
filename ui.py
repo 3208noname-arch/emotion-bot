@@ -139,8 +139,10 @@ def check_topics(items):
         if not (-1 <= v <= 1 and 0 <= a <= 1):
             return f"{name}: 快は-1〜1、覚醒は0〜1"
         seen.add(name)
-        out.append({"name": name, "valence": round(v, 2), "arousal": round(a, 2),
-                    "note": str(it.get("note", ""))[:80]})
+        t = {"name": name, "valence": round(v, 2), "arousal": round(a, 2), "note": str(it.get("note", ""))[:80]}
+        if it.get("source") == "learned":      # ナギが会話で覚えた話題（印と覚えた時刻を残す）
+            t.update({"source": "learned", "at": str(it.get("at", ""))[:19]})
+        out.append(t)
     return out
 
 

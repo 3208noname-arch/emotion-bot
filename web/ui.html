@@ -57,7 +57,7 @@ a{color:var(--acc)}
 
 <section id="topics">
   <div class="card">
-    <div class="k">横が快（嫌い −1 〜 +1 好き）、縦が覚醒（心が動かない 0 〜 1 心が動く）。点はドラッグで動かせます。保存するまで反映されません。</div>
+    <div class="k">横が快（嫌い −1 〜 +1 好き）、縦が覚醒（心が動かない 0 〜 1 心が動く）。点はドラッグで動かせます。保存するまで反映されません。白抜きの点はナギが会話で口にして覚えた話題です。</div>
     <svg id="plot" viewBox="0 0 640 400" style="width:100%;height:auto;touch-action:none"></svg>
   </div>
   <div class="card">
@@ -164,7 +164,7 @@ function drawPlot() {
     let dy = 4;
     while (placed.some(([px, py]) => Math.abs(px - x) < 90 && Math.abs(py - (y + dy)) < 13)) dy += 14;
     placed.push([x, y + dy]);
-    s += `<g class="pt" data-i="${i}" transform="translate(${x},${y})"><circle r="7" fill="${c}"/><text x="10" y="${dy}">${esc(t.name)}</text></g>`;
+    s += `<g class="pt" data-i="${i}" transform="translate(${x},${y})">${t.source === "learned" ? `<circle r="6" fill="none" stroke="${c}" stroke-width="2.5"/>` : `<circle r="7" fill="${c}"/>`}<text x="10" y="${dy}">${esc(t.name)}</text></g>`;
   });
   $("#plot").innerHTML = s;
 }
@@ -173,7 +173,7 @@ function drawTable() {
     <td><input data-i="${i}" data-k="name" value="${esc(t.name)}"></td>
     <td><input type="number" step="0.05" min="-1" max="1" data-i="${i}" data-k="valence" value="${t.valence}"></td>
     <td><input type="number" step="0.05" min="0" max="1" data-i="${i}" data-k="arousal" value="${t.arousal}"></td>
-    <td><input data-i="${i}" data-k="note" value="${esc(t.note)}"></td>
+    <td><input data-i="${i}" data-k="note" value="${esc(t.note)}" title="${t.source === "learned" ? "ナギが会話で覚えた（" + esc(t.at || "") + "）" : "人が置いた"}"></td>
     <td><button class="btn ghost" data-del="${i}" title="消す">×</button></td></tr>`).join("");
 }
 function redraw() { drawPlot(); drawTable(); }

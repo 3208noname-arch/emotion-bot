@@ -89,6 +89,23 @@ DID_GUIDE = ("今さっき新しく何かをした（買った・食べた・遊
              "【最近の出来事】に既にあることは足さない。出来事や自分の前の発言と食い違うことは言わない")
 
 
+# ナギが会話で口にした好き嫌いを覚えて、話題の好き嫌いの図を自分で育てる（10-12 ユーザーのメモ）
+TASTE_GUIDE = ("自分の好き嫌いを新しく口にしたら（「カラオケは好き」「ピーマン無理」）、"
+               'JSONに "taste": {"topic": "カラオケ", "like": 好きなら1に近く、嫌いなら-1に近い数} を足す。'
+               "【自分の好き嫌い】と食い違うことは言わない")
+
+
+def parse_taste(text):
+    """返事に添えられた「口にした好き嫌い」。無ければ None。"""
+    try:
+        d = json.loads(text).get("taste")
+    except (ValueError, AttributeError):
+        return None
+    if not isinstance(d, dict) or not isinstance(d.get("like"), (int, float)) or not str(d.get("topic") or "").strip():
+        return None
+    return {"name": str(d["topic"]).strip(), "like": float(d["like"])}
+
+
 def parse_did(text):
     """返事に添えられた「今やった行動」。無ければ None。"""
     try:
@@ -101,9 +118,10 @@ def parse_did(text):
     return {"what": str(d["what"]).strip()[:30], "yen": int(yen) if yen.isdigit() else 0, "ate": d.get("ate") is True}
 
 
-async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None, mood_text=None):
+async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None, mood_text=None, on_taste=None, tastes=None):
     """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。events は最近の出来事の行。
-    on_did(what, yen, ate) は、返事の中で「今やった」と言った行動を受け取る。"""
+    on_did(what, yen, ate) は、返事の中で「今やった」と言った行動を受け取る。
+    on_taste(name, like) は、返事の中で口にした好き嫌いを受け取る。tastes は今の自分の好き嫌い（言葉）。"""
     t = now()
     log_lines = "\n".join(line(m, t) for m in recent)
     to = (f"【返信先】\n{line(target, t)}" if target else
@@ -116,6 +134,8 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
     if mood_text:
         turn += "\n【気分】" + mood_text + "。" + MOOD_GUIDE
     turn += "\n【最近の出来事】" + ("／".join(events) or "特に無し") + "\n【行動】" + DID_GUIDE
+    if tastes:
+        turn += "\n【自分の好き嫌い】" + tastes + "\n【好き嫌い】" + TASTE_GUIDE
     if note:
         turn += "\n【補足】" + note
     if kind == "reaction":
@@ -135,6 +155,9 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
             d = parse_did(text) if on_did and kind != "reaction" else None
             if d:
                 on_did(**d)
+            tt = parse_taste(text) if on_taste and kind != "reaction" else None
+            if tt:
+                on_taste(**tt)
             return out
         log.info("型・口調が合わない。引き直す: %r", text[:80])
     return None   # 全滅なら黙る（定型で埋めない。黙っても不自然ではない）
