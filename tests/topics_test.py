@@ -35,4 +35,21 @@ ok(P.mentioned({"name": "ピーマン・ナス"}, "ナス嫌い"), "「・」で
 ts = [{"name": "まかない", "valence": 0.8, "arousal": 0.7}, {"name": "政治", "valence": -0.1, "arousal": 0.1},
       {"name": "虫", "valence": -0.8, "arousal": 0.9}]
 ok(P.as_words(ts) == "好き: まかない／嫌い: 虫", "どうでもいい話題は渡さない")
+# 経験で育てる
+t = {"name": "まかない", "valence": 0.8, "arousal": 0.7}
+P.experience(t, True, 5)
+ok(t["valence"] == 0.83 and t["arousal"] == 0.73 and t["anchor"] == {"valence": 0.8, "arousal": 0.7},
+   "混ざって良い反応なら快も覚醒も上がる。人が置いた場所を錨として覚える")
+for _ in range(20):
+    P.experience(t, True, 5)
+ok(t["valence"] == 1.0 and t["arousal"] == 0.9, "人が置いた話題は錨から±0.2まで（快は1で頭打ち）")
+for _ in range(100):
+    P.experience(t, False, -5)
+ok(t["valence"] == 0.6 and t["arousal"] == 0.5, "下げる時も錨から-0.2まで")
+k = {"name": "カラオケ", "valence": 0.1, "arousal": 0.5, "source": "learned"}
+for _ in range(20):
+    P.experience(k, False, -5)
+ok(k["valence"] == -0.5 and k["arousal"] == 0.3 and "anchor" not in k, "覚えた話題は錨なしで動く")
+ok(P.experience({"name": "x", "valence": 0, "arousal": 0.5, "source": "learned"}, True, 1) == (0, 0.03),
+   "気分の動きが小さければ快は動かさない")
 print(f"ok {n}")

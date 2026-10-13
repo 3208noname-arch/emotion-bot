@@ -142,6 +142,11 @@ def check_topics(items):
         t = {"name": name, "valence": round(v, 2), "arousal": round(a, 2), "note": str(it.get("note", ""))[:80]}
         if it.get("source") == "learned":      # ナギが会話で覚えた話題（印と覚えた時刻を残す）
             t.update({"source": "learned", "at": str(it.get("at", ""))[:19]})
+        elif isinstance(it.get("anchor"), dict):   # 人が置いた場所（経験で ±0.2 まで動く。その錨）
+            try:
+                t["anchor"] = {"valence": float(it["anchor"]["valence"]), "arousal": float(it["anchor"]["arousal"])}
+            except (KeyError, TypeError, ValueError):
+                pass
         out.append(t)
     return out
 
@@ -200,17 +205,20 @@ MECHS = [
              "**態度・口調にはまだ効かない**", "value": "likes"},
     {"name": "呼び名", "status": "count", "since": "0.6.0",
      "does": "誰が誰をどう呼ぶかを集める。会話にはまだ使わない", "value": "names"},
-    {"name": "話題の覚醒（乗りやすさ）", "status": "todo", "since": None,
-     "does": "混ざるかどうか・反応の速さに効かせる予定。今は「大学生の身近な話題か」の判定で決めている", "value": None},
-    {"name": "経験で話題の図を育てる", "status": "todo", "since": None,
-     "does": "混ざったか素通りしたかで覚醒を、話題の後の気分で快を動かす（覚えた好き嫌いの2段目）", "value": None},
+    {"name": "話題の覚醒（乗りやすさ）", "status": "on", "since": "0.11.0",
+     "does": "話しかけられていない時に混ざるかに効く（覚醒0.4〜0.8で熱が0→1）。話題の図に当たらない時は「大学生の身近な話題か」の判定で代える。"
+             "**反応の速さにはまだ効かない**", "value": None},
+    {"name": "経験で話題の図を育てる", "status": "on", "since": "0.11.0",
+     "does": "話題が出てから10分で、混ざったら覚醒+0.03・素通りなら−0.01。その間の人の反応で気分が±2以上動いたら快を±0.03。"
+             "人が置いた点は置いた場所から±0.2まで", "value": "episodes"},
     {"name": "嫌いな話題は1回目は断る", "status": "todo", "since": None,
      "does": "嫌いな話題を振られたらまず断る。続けられたら好感度を下げる", "value": None},
     {"name": "好感度を「居心地の予想」にする", "status": "todo", "since": None,
      "does": "その人といると居心地がどうなるかの予想として、予想より良ければ上げる。親しいほど下がりにくい", "value": None},
-    {"name": "行動を居心地の予想で選ぶ", "status": "todo", "since": None,
-     "does": "返す・黙る・話題を変える・絡みに行く・抜けるを、居心地が上がりそうな方で選ぶ（今は手書きの確率表）",
-     "value": None},
+    {"name": "行動を居心地の予想で選ぶ", "status": "on", "since": "0.11.0",
+     "does": "話しかけられていない時の、黙る・リアクション・一言・普通に返すを、話題の熱と快・気分・型ごとの予想から選ぶ。"
+             "予想は混ざった後10分の人の反応で直す。**話しかけられた時・話題を変える・絡みに行く・抜けるは、まだ決まりごとのまま**",
+     "value": "policy"},
 ]
 
 
@@ -235,6 +243,8 @@ async def mechs(_):
         "likes": f"{len(likes)}人・" + "、".join(f"{p['display']}{round(p['v']):+d}" for p in
                                                   sorted(likes.values(), key=lambda p: -p["v"])[:3]),
         "names": f"{len(s.get('names', {}))}人分",
+        "episodes": f"見ている話題 {len(s.get('episodes', []))}件",
+        "policy": "予想 " + ("、".join(f"{k}{v:+.1f}" for k, v in s.get("policy", {}).get("q", {}).items()) or "まだ無し"),
     }
     return web.json_response({"items": [{**x, "now": vals.get(x["value"]) if x["value"] else None} for x in MECHS]})
 

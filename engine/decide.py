@@ -201,6 +201,14 @@ def choose(addressed, interest, share, humans, state, r, energy=70):
     return "none"
 
 
+def free_choice(addressed, share, humans, state, energy):
+    """決まりごと（話しかけられた・寝ている・講義中・気力切れ・喋りすぎ）に当たらず、
+    混ざるかどうかを居心地の予想（engine/policy.py）で選んでよいか。当たる時は choose が決める。"""
+    if addressed or state in ("寝ている", "離席中", "バイト中", "講義中") or energy < 25:
+        return False
+    return not (humans and share > SHARE_SLACK / (humans + 1))
+
+
 def start_due(t, last_at, last_human_at, state, energy, starts_today, r):
     """自分から話題を出すか。チャンネルが静かで、自分が空いていて、今日まだ出し足りない時だけ。"""
     if state not in ("ふつう", "深夜", "起きたて") or energy < START_ENERGY or starts_today >= STARTS_PER_DAY:

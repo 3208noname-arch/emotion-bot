@@ -14,6 +14,7 @@ class SnapshotMixin:
         ids = [m.id for m in sent if m is not None]
         if not ids:
             return
+        self.mark_spoke()
         rel = self.s.get("likes", {}).get(str(target_id), {}).get("v") if target_id else None
         self.mood_settle(t)
         rec = snapshot.build(t, act["state"], self.body, body.as_feelings(self.body, t), relation=rel,

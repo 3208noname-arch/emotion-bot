@@ -7,12 +7,21 @@
 - **覚えた話題は消さない**（10-12 ユーザー「消すわけにもいかない。参照しないだけで増えるだけ増えて、話題が出たら引っ張り出せばいい」）。
   使うのは active で選んだ分だけ: 人が置いた話題すべて＋会話に名前が出た覚えた話題＋最近言った覚えた話題 RECENT_N 件。
   残りは眠らせておき、Jevにも LLM にも渡さない（話題が増えるほどJevへの問いが増えるため）
+- **経験で育てる**（2段目・10-13）: 話題が出てから EPISODE_MIN 分の間に、ナギが混ざったら覚醒を上げ、素通りしたら下げる。
+  その間の人の反応で気分が上がれば快を上げ、下がれば下げる。
+  人が置いた話題は、置いた場所（anchor）から ±ANCHOR_RANGE までしか動かさない（錨。ユーザーが ±0.2 を選んだ）。
+  覚えた話題は −1〜1・0〜1 の中で自由に動く
 """
 
 RECENT_N = 10
 PULL = 0.3            # 既にある覚えた話題を、言った向きへ寄せる割合
 NEW_AROUSAL = 0.5
 SHOW_FROM = 0.2       # 快がこれ以上離れている話題だけ、LLMに「好き・嫌い」として渡す
+EPISODE_MIN = 10
+JOINED_AROUSAL, IGNORED_AROUSAL = 0.03, -0.01
+FELT_FROM = 2.0       # 人の反応による気分の動きが、これ以上なら快を動かす
+FELT_VALENCE = 0.03
+ANCHOR_RANGE = 0.2
 
 
 def clean(name):
@@ -59,3 +68,20 @@ def as_words(topics):
     likes = [t["name"] for t in sorted(topics, key=lambda t: -t["valence"]) if t["valence"] >= SHOW_FROM]
     hates = [t["name"] for t in sorted(topics, key=lambda t: t["valence"]) if t["valence"] <= -SHOW_FROM]
     return f"好き: {'、'.join(likes) or '特に無し'}／嫌い: {'、'.join(hates) or '特に無し'}"
+
+
+def experience(t, joined, felt):
+    """話題が出た後の経験で、その話題の座標を動かす。joined はナギが混ざったか、felt はその間の人の反応による気分の動き。
+    動いた量 (快, 覚醒) を返す。"""
+    dv = FELT_VALENCE if felt >= FELT_FROM else -FELT_VALENCE if felt <= -FELT_FROM else 0.0
+    da = JOINED_AROUSAL if joined else IGNORED_AROUSAL
+    if t.get("source") == "learned":
+        lo_v, hi_v, lo_a, hi_a = -1.0, 1.0, 0.0, 1.0
+    else:
+        a = t.setdefault("anchor", {"valence": t["valence"], "arousal": t["arousal"]})
+        lo_v, hi_v = max(-1.0, a["valence"] - ANCHOR_RANGE), min(1.0, a["valence"] + ANCHOR_RANGE)
+        lo_a, hi_a = max(0.0, a["arousal"] - ANCHOR_RANGE), min(1.0, a["arousal"] + ANCHOR_RANGE)
+    v0, a0 = t["valence"], t["arousal"]
+    t["valence"] = round(max(lo_v, min(hi_v, v0 + dv)), 3)
+    t["arousal"] = round(max(lo_a, min(hi_a, a0 + da)), 3)
+    return round(t["valence"] - v0, 3), round(t["arousal"] - a0, 3)

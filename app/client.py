@@ -154,21 +154,26 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
         # 名前ではなくIDで数える（サーバーでの表示名と、Botアカウントの名前が違うことがあるため）
         share, humans = decide.my_share([{"author": m["author_id"], "bot": m["bot"]}
                                          for m in recent[-SHARE_WINDOW:]], self.user.id)
-        interest = None
+        interest, hit, probs = None, None, None
         awake = act["state"] not in ("寝ている", "バイト中", "離席中")
         convo = "\n".join(f"{m['author']}: {m['text']}" for m in recent[-6:])
         if awake and addressed:
-            await self.read_topic(convo)      # 話題の好き嫌いで気分を動かす
+            hit = await self.read_topic(convo)      # 話題の好き嫌いで気分を動かす
         elif awake:
-            interest, invite, _ = await asyncio.gather(jev_interest(convo), jev(convo, JEV_INVITE),
-                                                       self.read_topic(convo))
+            interest, invite, hit = await asyncio.gather(jev_interest(convo), jev(convo, JEV_INVITE),
+                                                         self.read_topic(convo))
             if invite is not None and invite >= decide.INTEREST_TRUE:
                 addressed = True       # 「誰か話そう」は自分にも向いている
                 log.info("その場の誰かへの呼びかけ（%.2f）→ 話しかけられた扱い", invite)
-        kind = decide.choose(addressed, interest, share, humans, act["state"], random.random(),
-                             self.body["energy"])
-        log.info("判断: 宛先=%s 関心=%s シェア=%.2f 人数=%d 様子=%s → %s", addressed,
-                 None if interest is None else round(interest, 2), share, humans, act["state"], kind)
+        if decide.free_choice(addressed, share, humans, act["state"], self.body["energy"]):
+            # 決まりごとに当たらなければ、混ざり方を居心地の予想で選ぶ（10-13）
+            kind, probs = self.choose_by_comfort(hit, interest, random.random())
+        else:
+            kind = decide.choose(addressed, interest, share, humans, act["state"], random.random(),
+                                 self.body["energy"])
+        log.info("判断: 宛先=%s 関心=%s 話題=%s シェア=%.2f 人数=%d 様子=%s → %s%s", addressed,
+                 None if interest is None else round(interest, 2), hit and hit["name"], share, humans, act["state"],
+                 kind, f"（予想で選んだ {probs}）" if probs else "")
         if kind == "defer":
             self.s.setdefault("deferred", []).append({**target, "at": t.isoformat(), "was": act["state"],
                                                        "why": self.body.get("away_why")})
@@ -177,8 +182,9 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
             return None
         if kind == "none":
             return None
-        hot = interest is not None and interest >= decide.INTEREST_TRUE
-        return {"target": target, "addressed": addressed, "kind": kind, "act": act, "at": t, "hot": hot}
+        hot = (interest is not None and interest >= decide.INTEREST_TRUE) or bool(hit and hit["arousal"] >= 0.6)
+        return {"target": target, "addressed": addressed, "kind": kind, "act": act, "at": t, "hot": hot,
+                "probs": probs, "topic": hit and hit["name"]}
 
     async def reply(self, plan, note=None):
         target, kind, act = plan["target"], plan["kind"], decide.activity(now(), self.body)
@@ -202,10 +208,13 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
         body.spend_talk(self.body, 0 if kind == "reaction" else sum(map(len, out)), t, hot=plan.get("hot"))
         self.last_sent_at = now()
         self.s["answered"] = (self.s.get("answered", []) + [target["id"]])[-ANSWERED_KEEP:]
+        if plan.get("probs"):
+            self.note_joined(kind, t)     # 10分後に、人の反応で予想を直す
         save_state(self.s)
         msg = await self.ch.fetch_message(target["id"])
         if kind == "reaction":
             await msg.add_reaction(out)
+            self.mark_spoke()
             return
         # 会話が先に進んでいる時、または話しかけられた時は「返信」で宛先を示す
         moved_on = self.recent and self.recent[-1]["id"] != target["id"]
@@ -218,7 +227,8 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
             else:
                 sent.append(await self.ch.send(text))
         self.remember(sent, t, act, {"source": plan.get("source", "reply"), "kind": kind,
-                                     "addressed": plan["addressed"], "hot": bool(plan.get("hot"))},
+                                     "addressed": plan["addressed"], "hot": bool(plan.get("hot")),
+                                     "topic": plan.get("topic"), "probs": plan.get("probs")},
                       target["author_id"])
 
     async def defer_loop(self):
