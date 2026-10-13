@@ -15,6 +15,8 @@ class SnapshotMixin:
         if not ids:
             return
         self.mark_spoke()
+        self.used("today")      # LLMに日付と予定を渡して書いた発言
+        self.used("mood")       # 同じく気分を渡して書いた発言
         rel = self.s.get("likes", {}).get(str(target_id), {}).get("v") if target_id else None
         self.mood_settle(t)
         rec = snapshot.build(t, act["state"], self.body, body.as_feelings(self.body, t), relation=rel,

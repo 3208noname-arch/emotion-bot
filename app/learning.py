@@ -72,6 +72,7 @@ class LearningMixin:
                 return
             display = self.ch.guild.me.display_name if target == self.user else target.display_name
             names.record(self.s.setdefault("names", {}), target.id, display, form, m.author.id, now())
+            self.used("names")
             save_state(self.s)
             log.info("呼び名: %s → %s「%s」", m.author.display_name, display, form)
         except Exception:
@@ -161,6 +162,8 @@ class LearningMixin:
                 if p.get("me", 0) >= affinity.TRUE:
                     d += affinity.apply(author, affinity.DELTA[("support", "me")], t, "ナギを庇った", quote)
                     self.mood_hit(mood.people_delta("support", "me"), mood.people_reason("support", name))
+            if d:
+                self.used("likes")
             save_state(self.s)
             log.info("好感度: %s→%s %s 判定=%s（%s・後ろ%d件）→ %+g = %+.0f", name, who, quote[:30], kind,
                      " ".join(f"{k}{v:.2f}" for k, v in p.items()), len(after), d, author["v"])

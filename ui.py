@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from aiohttp import web
 
-from engine import affinity, body, decide, mood, ratings, snapshot
+from engine import affinity, body, decide, mechs as mech, mood, ratings, snapshot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state.json")
@@ -183,45 +183,6 @@ async def info(_):
                               "services": [await service(n) for n in SERVICES]})
 
 
-# 仕組みの一覧（10-12 ユーザー「どこまで入っていて、どこがまだかを見られるUI」）。
-# **仕組みを足したり効かせ方を変えたら、ここも直す**（説明文が古いまま残る事故が一度あった）。
-# status: on（使っている）／count（数えるだけ。会話や行動にはまだ効かない）／todo（まだ作っていない）
-MECHS = [
-    {"name": "体（眠気・空腹・気力・残高）", "status": "on", "since": "0.5.0",
-     "does": "寝る・起きる・食べる・抜けるを自分で選ぶ。体の感じを言葉でLLMに渡す", "value": "body"},
-    {"name": "曜日と今日・明日の予定", "status": "on", "since": "0.9.6",
-     "does": "LLMに日付・曜日・授業とバイトの予定を渡す（土日に1限の話をしない）", "value": "today"},
-    {"name": "会話で言った行動", "status": "on", "since": "0.9.7",
-     "does": "「今やった」と言ったことを出来事に残し、残高から引く", "value": "events"},
-    {"name": "居心地（気分）", "status": "on", "since": "0.9.8",
-     "does": "体・人・話題で動き、1時間で半分ずつ基準へ戻る。LLMに言葉で渡し、口調ににじませる。"
-             "**返す・黙るの選び方にはまだ効かない**", "value": "mood"},
-    {"name": "話題の快（好き嫌い）", "status": "on", "since": "0.9.8",
-     "does": "話題が会話に出ると、快の向きに気分を動かす。好き嫌いをLLMに渡す（0.10.0〜）", "value": "topics"},
-    {"name": "口にした好き嫌いを覚える", "status": "on", "since": "0.10.0",
-     "does": "会話で言った好き嫌いを話題の図に足す（白抜きの点）。消さずに眠らせ、話題が出たら使う", "value": "learned"},
-    {"name": "好感度", "status": "on", "since": "0.9.0",
-     "does": "けなし・庇い・冗談・見下し（0.10.2〜）を前後6件の会話で判定して数える（0.9.9〜）。話しかけられた時の気分の動きに使う（0.9.8〜）。"
-             "**態度・口調にはまだ効かない**", "value": "likes"},
-    {"name": "呼び名", "status": "count", "since": "0.6.0",
-     "does": "誰が誰をどう呼ぶかを集める。会話にはまだ使わない", "value": "names"},
-    {"name": "話題の覚醒（乗りやすさ）", "status": "on", "since": "0.11.0",
-     "does": "話しかけられていない時に混ざるかに効く（覚醒0.4〜0.8で熱が0→1）。話題の図に当たらない時は「大学生の身近な話題か」の判定で代える。"
-             "**反応の速さにはまだ効かない**", "value": None},
-    {"name": "経験で話題の図を育てる", "status": "on", "since": "0.11.0",
-     "does": "話題が出てから10分で、混ざったら覚醒+0.03・素通りなら−0.01。その間の人の反応で気分が±2以上動いたら快を±0.03。"
-             "人が置いた点は置いた場所から±0.2まで", "value": "episodes"},
-    {"name": "嫌いな話題は1回目は断る", "status": "todo", "since": None,
-     "does": "嫌いな話題を振られたらまず断る。続けられたら好感度を下げる", "value": None},
-    {"name": "好感度を「居心地の予想」にする", "status": "todo", "since": None,
-     "does": "その人といると居心地がどうなるかの予想として、予想より良ければ上げる。親しいほど下がりにくい", "value": None},
-    {"name": "行動を居心地の予想で選ぶ", "status": "on", "since": "0.11.0",
-     "does": "話しかけられていない時の、黙る・リアクション・一言・普通に返すを、話題の熱と快・気分・型ごとの予想から選ぶ。"
-             "予想は混ざった後10分の人の反応で直す。**話しかけられた時・話題を変える・絡みに行く・抜けるは、まだ決まりごとのまま**",
-     "value": "policy"},
-]
-
-
 async def mechs(_):
     """仕組みの一覧と、それぞれの今の値。"""
     s, t = load(STATE, {}), now()
@@ -236,17 +197,23 @@ async def mechs(_):
     vals = {
         "body": b and body.as_feelings(b, t) + f"・残高{b['money']:,}円",
         "today": decide.day_text(t),
-        "events": "／".join(e["what"] for e in s.get("events", [])[-3:]) or "無し",
+        "did": "／".join(e["what"] for e in s.get("events", [])[-3:]) or "無し",
         "mood": m and b and f"{mood.as_words(m, base)}（{round(m['v']):+d}）",
-        "topics": f"{len(tps) - len(learned)}件（人が置いた分）",
+        "topic_valence": f"{len(tps) - len(learned)}件（人が置いた分）",
         "learned": f"{len(learned)}件" + (f"（最近: {learned[-1]['name']}）" if learned else ""),
         "likes": f"{len(likes)}人・" + "、".join(f"{p['display']}{round(p['v']):+d}" for p in
                                                   sorted(likes.values(), key=lambda p: -p["v"])[:3]),
         "names": f"{len(s.get('names', {}))}人分",
-        "episodes": f"見ている話題 {len(s.get('episodes', []))}件",
-        "policy": "予想 " + ("、".join(f"{k}{v:+.1f}" for k, v in s.get("policy", {}).get("q", {}).items()) or "まだ無し"),
+        "experience": f"見ている話題 {len(s.get('episodes', []))}件",
+        "policy_learn": "予想 " + ("、".join(f"{k}{v:+.1f}" for k, v in s.get("policy", {}).get("q", {}).items()) or "まだ無し"),
     }
-    return web.json_response({"items": [{**x, "now": vals.get(x["value"]) if x["value"] else None} for x in MECHS]})
+    reg = s.get("mechs", {})
+    items = [{"name": x["name"], "does": x["does"], "status": mech.status(x, reg.get(x["key"]), t),
+              "since": (reg.get(x["key"]) or {}).get("first_ver"), "first": (reg.get(x["key"]) or {}).get("first"),
+              "last": (reg.get(x["key"]) or {}).get("last"), "n": (reg.get(x["key"]) or {}).get("n", 0),
+              "now": vals.get(x["key"])} for x in mech.CATALOG]
+    items += [{**x, "status": "todo"} for x in mech.PLANNED]
+    return web.json_response({"items": items, "since": min((r["first"] for r in reg.values()), default=None)})
 
 
 async def index(_):

@@ -82,6 +82,7 @@ class LifeMixin:
         t = now()
         ev = body.did(self.body, t, what, yen, ate)
         if ev:
+            self.used("did")
             self.note_events(t, [ev])
             save_state(self.s)
             log.info("会話で言った行動: %s（残高%s円）", ev, f"{self.body['money']:,}")
@@ -105,6 +106,7 @@ class LifeMixin:
         self.s["last_sched"] = sched
         self.note_events(t, [e for e in ev if e not in ("戻った",)])
         self.mood_settle(t)
+        self.used("body")
         await self.flush_likes()      # 会話が止まっても10分で読む
         self.close_episodes(t)        # 話題の後の経験で、話題の図を育てる
         self.close_policy(t)          # 混ざった後の反応で、居心地の予想を直す

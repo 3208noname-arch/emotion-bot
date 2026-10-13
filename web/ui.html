@@ -78,7 +78,7 @@ a{color:var(--acc)}
 <section id="ratings"><div class="card"><pre id="rsum"></pre></div><div class="card"><table id="rtable"></table></div></section>
 <section id="log"><div class="card"><div class="row" style="margin-bottom:8px"><button class="btn ghost" id="reloadLog">再読み込み</button>
   <input id="logFilter" placeholder="絞り込み（例: 判断 / 好感度 / 拾う）" style="max-width:320px"></div><pre id="logBox"></pre></div></section>
-<section id="mechs"><div class="card"><div class="k">ナギの感情の仕組みが、今どこまで入っているか。<b class="pos">使用中</b>＝会話や行動に効いている／<b style="color:var(--warn)">数えるだけ</b>＝記録しているが、まだ効かせていない／<span class="mute">未実装</span>＝設計だけ</div><table id="mechTable"></table></div></section>
+<section id="mechs"><div class="card"><div class="k">ナギの感情の仕組みが、今どこまで入っているか。<b>状態は、Botが実際にその仕組みを効かせた記録から出しています</b>（手書きではない。記録は0.11.1から）。<b class="pos">使用中</b>＝会話や行動に効いている／<b style="color:var(--warn)">数えるだけ</b>＝記録しているが、まだ効かせていない／<span class="mute">未実装</span>＝設計だけ</div><table id="mechTable"></table></div></section>
 <section id="info">
   <div class="card"><div class="k">動いているもの</div><table id="svc"></table></div>
   <div id="linkCards"></div>
@@ -162,14 +162,15 @@ function drawMood(md) {
   if (pts.length < 2) s += `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="var(--mute)">記録が溜まるまで待ってね（10分ごとに1点）</text>`;
   $("#moodPlot").innerHTML = s;
 }
-const MECH_LABEL = {on: ["使用中", "var(--pos)"], count: ["数えるだけ", "var(--warn)"], todo: ["未実装", "var(--mute)"]};
+const MECH_LABEL = {on: ["使用中", "var(--pos)"], count: ["数えるだけ", "var(--warn)"], idle: ["しばらく動いていない", "var(--warn)"],
+  never: ["まだ動いていない", "var(--mute)"], todo: ["未実装", "var(--mute)"]};
 async function loadMechs() {
   const d = await (await fetch("api/mechs")).json();
   const bold = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
   $("#mechTable").innerHTML = "<tr><th>仕組み</th><th>状態</th><th>何に効くか</th><th>今の値</th></tr>" + d.items.map(x => {
     const [lab, col] = MECH_LABEL[x.status];
-    return `<tr><td><b>${esc(x.name)}</b>${x.since ? `<div class="mute">${esc(x.since)}〜</div>` : ""}</td>
-      <td style="color:${col};white-space:nowrap;font-weight:600">${lab}</td><td>${bold(x.does)}</td>
+    return `<tr><td><b>${esc(x.name)}</b>${x.since ? `<div class="mute">初めて動いた ${esc(x.since.replace("minato ", ""))}</div>` : ""}</td>
+      <td style="color:${col};white-space:nowrap;font-weight:600">${lab}${x.last ? `<div class="mute" style="font-weight:400">最後 ${esc(x.last.slice(5, 16).replace("T", " "))}・${x.n}回</div>` : ""}</td><td>${bold(x.does)}</td>
       <td class="mute">${x.now ? esc(x.now) : "—"}</td></tr>`;
   }).join("");
 }

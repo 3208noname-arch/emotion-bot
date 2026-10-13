@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 
 from app.jev import jev_many
 from app.store import ROOT, now
-from engine import body, mood, policy, topics
+from app import __version__
+from engine import body, mechs, mood, policy, topics
 
 log = logging.getLogger("minato")
 
@@ -27,6 +28,10 @@ def load_topics():
 
 
 class MoodMixin:
+    def used(self, key):
+        """仕組みが実際に効いた（Web UI の仕組みタブの状態は、この記録から決める）。"""
+        mechs.used(self.s.setdefault("mechs", {}), key, now(), __version__)
+
     @property
     def mood(self):
         return self.s.setdefault("mood", mood.new(now()))
@@ -87,6 +92,7 @@ class MoodMixin:
                 continue
             felt = self.people_felt(datetime.fromisoformat(e["at"]), topics.EPISODE_MIN)
             dv, da = topics.experience(tp, e["joined"], felt)
+            self.used("experience")
             log.info("経験: %s（%s・人の反応%+.1f）→ 快%+.2f 覚醒%+.2f = (%.2f, %.2f)", e["name"],
                      "混ざった" if e["joined"] else "素通り", felt, dv, da, tp["valence"], tp["arousal"])
         tmp = TOPICS_PATH + ".tmp"
@@ -101,7 +107,9 @@ class MoodMixin:
 
     def choose_by_comfort(self, hit, interest, r):
         """話題の熱と快・今の気分・型ごとの予想から、混ざり方を選ぶ。(型, 確率) を返す。"""
+        self.used("policy")
         if hit:
+            self.used("arousal")
             heat, valence = policy.heat_of(hit["arousal"]), hit["valence"]
         else:   # 話題の図に当たらなければ、Jev の「身近な話題か」で熱を決める
             heat, valence = (1.0 if interest is not None and interest >= 0.70 else 0.0), 0.0
@@ -123,6 +131,7 @@ class MoodMixin:
         for p in done:
             felt = self.people_felt(datetime.fromisoformat(p["at"]), policy.WINDOW_MIN)
             q = policy.update(self.policy_q, p["kind"], felt)
+            self.used("policy_learn")
             log.info("予想: %sで混ざった後の人の反応%+.1f → 予想%+.2f", p["kind"], felt, q)
 
     def recent_text(self):
@@ -136,6 +145,7 @@ class MoodMixin:
         obj = load_topics_file()
         done = topics.learn(obj["topics"], name, like, now().isoformat(timespec="seconds"))
         if done in ("added", "moved"):
+            self.used("learned")
             tmp = TOPICS_PATH + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(obj, f, ensure_ascii=False, indent=1)
@@ -160,4 +170,5 @@ class MoodMixin:
         why = f"{name}の話になった"
         if not any(e["why"] == why and t - datetime.fromisoformat(e["at"]) < TOPIC_AGAIN for e in self.mood["events"]):
             self.mood_hit(d, why, people=False)
+            self.used("topic_valence")
         return tp
