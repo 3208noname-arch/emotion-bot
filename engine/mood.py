@@ -19,7 +19,7 @@ BODY_GAIN = 0.6
 BROKE_PENALTY = 5
 
 # 人 → 一時的な上下
-PEOPLE = {("attack", "me"): -15, ("support", "me"): 8, ("joke", "me"): 3, ("belittle", "me"): -6,
+PEOPLE = {("attack", "me"): -15, ("support", "me"): 8, ("joke", "me"): 3, ("belittle", "me"): -6, ("treat", "me"): 5,
           ("belittle", "close"): -4, ("belittle", "friend"): -2,
           ("attack", "close"): -8, ("support", "close"): 3,
           ("attack", "friend"): -4, ("support", "friend"): 2}
@@ -66,7 +66,7 @@ def people_delta(kind, rel):
 
 
 REASON = {"attack": "{who}にけなされた", "support": "{who}に庇われた", "joke": "{who}の冗談で笑った",
-          "belittle": "{who}に見下された"}
+          "belittle": "{who}に見下された", "treat": "{who}に奢ってもらった"}
 
 
 def people_reason(kind, who, by=None):

@@ -49,13 +49,16 @@ ev = B.tick(b, T.replace(hour=12), "ふつう", False, None)
 ok("起きた" in ev, "それでも12時には起きる")
 
 # 食べる
+b = B.new(T, money=30000); b["hunger"] = 50
+at(b, T.replace(hour=12, minute=30))
+ok(b["hunger"] == 0 and b["money"] == 29500, "予算内なら昼を食べる")
 b = B.new(T); b["hunger"] = 50
 at(b, T.replace(hour=12, minute=30))
-ok(b["hunger"] == 0 and b["money"] == 6300, "昼を食べる")
-b = B.new(T.replace(hour=12)); b["hunger"] = 50; b["money"] = 1500
+ok(b["hunger"] == 0 and b["money"] == 6700, "予算を超えるなら昼もカップ麺（6,800円÷19日）")
+b = B.new(T.replace(hour=12)); b["hunger"] = 50; b["money"] = 50
 at(b, T.replace(hour=12, minute=30))
-ok(b["hunger"] > 50, "金欠なら昼を抜く")
-b = B.new(T); b["hunger"] = 75; b["energy"] = 50
+ok(b["hunger"] > 50, "カップ麺も買えなければ昼を抜く")
+b = B.new(T, money=50000); b["hunger"] = 75; b["energy"] = 50
 ev = at(b, T + timedelta(minutes=1))
 ok("コンビニに行く" in ev and b["away_why"] == "コンビニ", "腹が減ったらコンビニ")
 ok(B.felt_sleepy(b, T + timedelta(minutes=2)) >= 30 + B.POST_MEAL_SLEEPY - 0.01 and b["sleepy"] < 31, "食後は1時間だけ眠い（溜まる眠気には足さない）")
@@ -86,13 +89,38 @@ b2 = B.new(T); b2["sleepy"] = 80; B.spend_talk(b2, 30, T)
 ok(e0 - b2["energy"] == 2 * (e0 - b["energy"]), "眠いと話す気力の減りが倍")
 
 # お金
-b = B.new(T.replace(day=25), money=1000)
+b = B.new(T.replace(day=14), money=1000)
+ev = at(b, T.replace(day=15, hour=20))
+ok(b["money"] == 1000 + B.SEND and "仕送りが届いた" in ev, "仕送り")
 at(b, T.replace(day=25, hour=20, minute=1))
-ok(b["money"] == 86000, "給料日")
+ok(b["money"] == 1000 + B.SEND + B.PAY, "給料日")
 at(b, T.replace(day=27, hour=20))
-ok(b["money"] == 16000, "引き落とし")
+ok(b["money"] == 1000 + B.SEND + B.PAY - B.BILLS, "引き落とし")
 at(b, T.replace(day=28, hour=20))
-ok(b["money"] == 16000, "月に1回だけ")
+ok(b["money"] == 1000 + B.SEND + B.PAY - B.BILLS, "月に1回だけ")
+
+# 予算
+D17 = T.replace(day=17)
+b = B.new(D17); b["money"] = 4000; b["paid"] = b["sent"] = b["billed"] = D17.strftime("%Y-%m")
+ok(B.allowance(b, D17) == 500, "給料日まで8日なら、残高を8で割った額が1日の予算")
+b2 = B.new(D17.replace(day=25)); b2["money"] = 100000; b2["paid"] = D17.strftime("%Y-%m")
+ok(B.allowance(b2, D17.replace(day=25)) < 100000 / 30, "給料日の後は、まだ払っていない家賃を除いて割る")
+b["hunger"] = 75; b["energy"] = 50; b["at"] = D17.replace(hour=15).isoformat()
+ev = at(b, D17.replace(hour=15, minute=1))
+ok("コンビニに行く" in ev and b["money"] == 3600 and B.allowance(b, D17) == 500, "予算内ならコンビニ。使っても今日の予算は減らない")
+b["away_until"] = None; b["hunger"] = 75; b["at"] = D17.replace(hour=20).isoformat()
+ev = at(b, D17.replace(hour=20, minute=1))
+ok("節約して家でカップ麺を食べた" in ev and b["money"] == 3500 and b["hunger"] == 0, "予算を超えそうならカップ麺")
+b = B.new(D17); b["money"] = 50; b["hunger"] = 75; b["energy"] = 50; b["paid"] = b["sent"] = D17.strftime("%Y-%m")
+b["at"] = D17.replace(hour=15).isoformat()
+ev = at(b, D17.replace(hour=15, minute=1))
+ok(not ev and b["hunger"] > 75, "カップ麺も買えなければ食べられない")
+
+# 奢ってもらう
+b = B.new(T); b["money"] = 300; b["hunger"] = 80
+ok(B.did(b, T, "唐揚げ", 900, ate=True, treat=True) == "唐揚げ" and b["money"] == 300 and b["hunger"] == 0, "奢りは0円で食べる")
+B.did(b, T, "ジュース", treat=True)
+ok(B.did(b, T, "ケーキ", ate=True, treat=True) is None, "奢ってもらえるのは1日2回まで")
 
 # 渡し方
 b = B.new(T); b["sleepy"] = 90; b["hunger"] = 85

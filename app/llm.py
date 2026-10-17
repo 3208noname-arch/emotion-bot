@@ -76,7 +76,9 @@ KIND_LABEL = {"reaction": "リアクション", "short": "一言", "normal": "�
 def line(m, t):
     """会話の1行。いつの発言かを先頭に付ける（時刻が無いと、昨日の話と今の話の区別が付かない）。"""
     sec = (t - datetime.fromisoformat(m["at"])).total_seconds() if m.get("at") else 0
-    return f"［{decide.ago(sec)}］{m['author']}: {m['text']}"
+    # 自分の発言は「あなた」と書く。名前だけだと、自分の発言を他人の発言と取り違えた（10-14）
+    who = f"あなた（{m['author']}）" if m.get("me") else m["author"]
+    return f"［{decide.ago(sec)}］{who}: {m['text']}"
 
 
 MOOD_GUIDE = "口調・返事の長さ・食いつき方ににじませるだけにする。「機嫌が悪い」など気分の言葉そのものは口に出さない"
@@ -86,7 +88,8 @@ MOOD_GUIDE = "口調・返事の長さ・食いつき方ににじませるだけ
 # 禁じるより、言ったことを本当にやったことにする（話題を出すにも行動は要る。ユーザー）
 DID_GUIDE = ("今さっき新しく何かをした（買った・食べた・遊んだ・どこかへ行った）と話すなら、"
              'JSONに "did": {"what": "クレーンゲーム", "yen": 使った円, "ate": 食べたなら true} を足す。'
-             "【最近の出来事】に既にあることは足さない。出来事や自分の前の発言と食い違うことは言わない")
+             "【最近の出来事】に既にあることは足さない。出来事や自分の前の発言と食い違うことは言わない。"
+             '会話の中で誰かに奢ってもらった・食べ物や飲み物をもらって受け取ったなら、"yen": 0 にし、"by": "その人の表示名" を足す')
 
 
 # ナギが会話で口にした好き嫌いを覚えて、話題の好き嫌いの図を自分で育てる（10-12 ユーザーのメモ）
@@ -115,7 +118,9 @@ def parse_did(text):
     if not isinstance(d, dict) or not str(d.get("what") or "").strip():
         return None
     yen = str(d.get("yen") or 0).replace(",", "").replace("円", "")
-    return {"what": str(d["what"]).strip()[:30], "yen": int(yen) if yen.isdigit() else 0, "ate": d.get("ate") is True}
+    by = str(d.get("by") or "").strip()[:40] or None
+    return {"what": str(d["what"]).strip()[:30], "yen": int(yen) if yen.isdigit() else 0, "ate": d.get("ate") is True,
+            "by": by}
 
 
 async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None, mood_text=None, on_taste=None, tastes=None):

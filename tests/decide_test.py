@@ -135,6 +135,14 @@ eq(D.ago(30), "今", "1分未満は今")
 eq(D.ago(5 * 60 + 59), "5分前", "分は切り捨て")
 eq(D.ago(3 * 3600 + 120), "3時間前", "1時間以上は時間")
 eq(D.ago(50 * 3600), "2日前", "1日以上は日")
+eq([D.rough_ago(s * 60) for s in (5, 44, 70, 200, 1500)], ["さっき", "30分くらい前", "1時間くらい前", "3時間くらい前", "昨日"],
+   "出来事の経過はざっくり")
+
+# 誰かに向けた発言は拾わない
+PK = MON.replace(hour=15)
+msg = {"author": 2, "bot": False, "at": (PK - timedelta(minutes=5)).isoformat()}
+eq(D.pickup([msg], 1, PK, "ふつう", 70) is not None, True, "放置された発言は拾う")
+eq(D.pickup([{**msg, "to_other": True}], 1, PK, "ふつう", 70), None, "誰かへの返信・メンションは拾わない")
 
 # 居心地の予想で選んでよいか
 eq(D.free_choice(False, 0.1, 3, "ふつう", 70), True, "話しかけられていない・空いている時だけ")

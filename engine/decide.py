@@ -230,8 +230,8 @@ def pickup(recent, me, t, state, energy):
     if state in ("寝ている", "バイト中", "離席中", "講義中") or energy < 25 or not recent:
         return None
     last = recent[-1]
-    if last["author"] == me or last.get("bot") or not last.get("at"):
-        return None
+    if last["author"] == me or last.get("bot") or not last.get("at") or last.get("to_other"):
+        return None     # 誰かに向けた発言は「放置」ではない（かき宛てを拾って「俺に振るな」と返した。10-14）
     age = t - datetime.fromisoformat(last["at"])
     return last if PICKUP_AFTER <= age <= PICKUP_UNTIL else None
 
@@ -272,6 +272,20 @@ def ago(sec):
     if m < 60 * 24:
         return f"{m // 60}時間前"
     return f"{m // (60 * 24)}日前"
+
+
+def rough_ago(sec):
+    """出来事の経過をざっくり言葉にする。「44分前」と細かく言い、評価で「精確すぎる」と言われた（10-12）。"""
+    m = sec / 60
+    if m < 20:
+        return "さっき"
+    if m < 45:
+        return "30分くらい前"
+    if m < 90:
+        return "1時間くらい前"
+    if m < 60 * 20:
+        return f"{round(m / 60)}時間くらい前"
+    return "昨日"
 
 
 LATE_WHY = {"寝ている": "寝てた", "バイト中": "バイト中だった",

@@ -56,6 +56,9 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
         ref = m.reference.resolved if m.reference else None
         if isinstance(ref, discord.Message):
             parts.append(f"（{ref.author.display_name}への返信）")
+        elif m.mentions:
+            # メンションは本文に「@名前」としか出ず、かき宛てを自分宛てと読んだことがある（10-14）
+            parts.append(f"（{'・'.join(u.display_name for u in m.mentions)}宛て）")
         if m.clean_content:
             parts.append(m.clean_content)
         parts += [f"［スタンプ「{s.name}」］" for s in m.stickers]
@@ -67,7 +70,10 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
     def entry(self, m):
         return {"id": m.id, "at": m.created_at.astimezone(JST).replace(tzinfo=None).isoformat(timespec="seconds"),
                 "author": m.author.display_name, "author_id": m.author.id,
-                "bot": m.author.bot, "text": self.describe(m),
+                "bot": m.author.bot, "text": self.describe(m), "me": m.author == self.user,
+                # 返信・メンションで自分以外の誰かに向けた発言（放置を拾う対象にしない）
+                "to_other": bool((m.reference and getattr(m.reference.resolved, "author", self.user) != self.user)
+                                 or (m.mentions and self.user not in m.mentions)),
                 "to_me": bool(m.reference and m.reference.resolved
                               and getattr(m.reference.resolved, "author", None) == self.user)}
 

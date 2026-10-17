@@ -8,7 +8,7 @@ import discord
 
 from app.llm import write
 from app.store import JST, now, save_state
-from engine import body, decide
+from engine import affinity, body, decide, mood
 
 log = logging.getLogger("minato")
 
@@ -74,18 +74,32 @@ class LifeMixin:
         body.spend_talk(self.body, sum(map(len, out)), t)
 
     def event_lines(self, t):
-        return [f"［{decide.ago((t - datetime.fromisoformat(e['at'])).total_seconds())}］{e['what']}"
+        return [f"［{decide.rough_ago((t - datetime.fromisoformat(e['at'])).total_seconds())}］{e['what']}"
                 for e in self.s.get("events", [])]
 
-    def did(self, what, yen=0, ate=False):
-        """返事の中で「今やった」と言った行動を、本当にやったことにする（出来事に残し、残高を減らす）。"""
+    def did(self, what, yen=0, ate=False, by=None):
+        """返事の中で「今やった」と言った行動を、本当にやったことにする（出来事に残し、残高を減らす）。
+        by は奢ってくれた人（0円で食べ、その人への好感度と気分が上がる。1日2回まで）。"""
         t = now()
-        ev = body.did(self.body, t, what, yen, ate)
+        ev = body.did(self.body, t, what, yen, ate, treat=bool(by))
+        if ev and by:
+            ev = f"{by}に{ev}を奢ってもらった"
+            self.treated(by, what, t)
         if ev:
             self.used("did")
             self.note_events(t, [ev])
             save_state(self.s)
             log.info("会話で言った行動: %s（残高%s円）", ev, f"{self.body['money']:,}")
+
+    def treated(self, by, what, t):
+        """奢ってもらった。好感度と気分を上げる（表示名で人を探す。見つからなければ気分だけ）。"""
+        self.used("treat")
+        self.mood_hit(mood.people_delta("treat", "me"), mood.people_reason("treat", by))
+        store = self.s.setdefault("likes", {})
+        uid = next((u for u, p in store.items() if p.get("display") == by), None)
+        if uid:
+            p = affinity.get(store, uid, by, t)
+            affinity.apply(p, affinity.DELTA[("treat", "me")], t, "ナギに奢った", what)
 
     def note_events(self, t, ev):
         """話題のネタにする最近の出来事（12時間・8件まで）。"""
@@ -110,6 +124,8 @@ class LifeMixin:
         await self.flush_likes()      # 会話が止まっても10分で読む
         self.close_episodes(t)        # 話題の後の経験で、話題の図を育てる
         self.close_policy(t)          # 混ざった後の反応で、居心地の予想を直す
+        if "節約して家でカップ麺を食べた" in ev:
+            self.used("budget")
         if ev:
             log.info("体: %s（%s）", "・".join(ev), body.as_numbers(b, t))
         save_state(self.s)

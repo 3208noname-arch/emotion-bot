@@ -40,15 +40,21 @@ POST_MEAL = timedelta(hours=1)
 FUN_HOLD = timedelta(minutes=40)   # 楽しい話題が続くと、その間は眠気を感じにくい
 
 LUNCH_YEN, SNACK_YEN = 500, 400
-BROKE = 2000               # これを割ると昼を抜く
-PAYDAY, PAY = 25, 85000    # 給料日
+CHEAP_YEN = 100            # 家のカップ麺。予算を超えそうな日はこれで済ませる
+BROKE = 2000               # これを割ると「金欠」（体の感じ・気分に出る）
+# お金の入り方（10-17 見直し）。最初は給料85,000円・仕送り無しで、自由に使えるのが月15,000円しか無く、
+# 毎日コンビニに2回行って半月で100円になった（友人「相当ブラック」）。
+# 火木金土18〜24時・時給1,100円で月約11万円＋仕送り3万円。家賃などを引いて月約7万円（1日約2,300円）
+PAYDAY, PAY = 25, 110000   # 給料日
+SENDDAY, SEND = 15, 30000  # 仕送り
 BILLDAY, BILLS = 27, 70000 # 家賃・光熱費・スマホ代
+TREATS_PER_DAY = 2         # 奢ってもらえるのは1日これまで（ずるにならないように）
 
 
 def new(t, money=6800):
     return {"sleepy": 30.0, "hunger": 30.0, "energy": 70.0, "money": money,
             "asleep": False, "away_until": None, "away_why": None,
-            "fun_until": None, "paid": None, "billed": None, "at": t.isoformat()}
+            "fun_until": None, "paid": None, "sent": None, "billed": None, "at": t.isoformat()}
 
 
 def _clip(b):
@@ -56,9 +62,43 @@ def _clip(b):
         b[k] = max(0.0, min(100.0, b[k]))
 
 
+def _day(t):
+    return (t - timedelta(hours=4)).date().isoformat()   # 1日の区切りは朝4時（decide.day_key と同じ）
+
+
+def _spend(b, yen, t):
+    b["money"] -= yen
+    sp = b.get("spent") or {}
+    if sp.get("day") != _day(t):
+        sp = {"day": _day(t), "yen": 0}
+    sp["yen"] += yen
+    b["spent"] = sp
+
+
+def spent_today(b, t):
+    sp = b.get("spent") or {}
+    return sp.get("yen", 0) if sp.get("day") == _day(t) else 0
+
+
+def allowance(b, t):
+    """今日使っていい額。朝の残高（今の残高＋今日使った分）を、次の給料日までの日数で割る
+    （給料日の後は、まだ払っていない家賃などを除く）。"""
+    if t.day >= PAYDAY:
+        nxt = (t.replace(day=1) + timedelta(days=32)).replace(day=PAYDAY)
+    else:
+        nxt = t.replace(day=PAYDAY)
+    days = max(1, (nxt.date() - t.date()).days)
+    reserve = BILLS if t.day >= PAYDAY and b.get("billed") != t.strftime("%Y-%m") else 0
+    return max(0, b["money"] + spent_today(b, t) - reserve) / days
+
+
+def can_spend(b, yen, t):
+    return b["money"] >= yen and spent_today(b, t) + yen <= allowance(b, t)
+
+
 def _eat(b, yen, t):
     b["hunger"] = 0.0
-    b["money"] -= yen
+    _spend(b, yen, t)
     b["ate_at"] = t.isoformat()
 
 
@@ -85,12 +125,18 @@ def tick(b, t, state, has_alarm, alarm):
 
     # お金（月の決まった日）
     ym = t.strftime("%Y-%m")
+    if t.day >= SENDDAY and b.get("sent") != ym:
+        b["money"] += SEND
+        b["sent"] = ym
+        ev.append("仕送りが届いた")
     if t.day >= PAYDAY and b.get("paid") != ym:
         b["money"] += PAY
         b["paid"] = ym
+        ev.append("給料が入った")
     if t.day >= BILLDAY and b.get("billed") != ym:
         b["money"] -= BILLS
         b["billed"] = ym
+        ev.append("家賃が引き落とされた")
 
     if b["asleep"]:
         b["sleepy"] += SLEEPY_ASLEEP * h
@@ -132,15 +178,20 @@ def tick(b, t, state, has_alarm, alarm):
         return ev
     if busy:
         return ev
-    # 食べる（気力が低いと面倒で放っておく）
-    if 12 <= t.hour < 14 and b["hunger"] >= LUNCH_FROM and b["money"] >= BROKE:
-        _eat(b, LUNCH_YEN, t)
-        ev.append("昼を食べた")
-    elif b["hunger"] >= SNACK_AT and b["money"] >= SNACK_YEN and b["energy"] >= LAZY_ENERGY:
-        _eat(b, SNACK_YEN, t)
-        b["away_until"], b["away_why"] = (t + timedelta(minutes=15)).isoformat(), "コンビニ"
-        ev.append("コンビニに行く")
-        return ev
+    # 食べる（気力が低いと面倒で放っておく）。今日の予算を超えそうなら、家のカップ麺で済ませる
+    lunch = 12 <= t.hour < 14 and b["hunger"] >= LUNCH_FROM
+    if (lunch or b["hunger"] >= SNACK_AT) and b["energy"] >= LAZY_ENERGY or lunch:
+        if lunch and can_spend(b, LUNCH_YEN, t):
+            _eat(b, LUNCH_YEN, t)
+            ev.append("昼を食べた")
+        elif not lunch and can_spend(b, SNACK_YEN, t):
+            _eat(b, SNACK_YEN, t)
+            b["away_until"], b["away_why"] = (t + timedelta(minutes=15)).isoformat(), "コンビニ"
+            ev.append("コンビニに行く")
+            return ev
+        elif b["money"] >= CHEAP_YEN:
+            _eat(b, CHEAP_YEN, t)
+            ev.append("節約して家でカップ麺を食べた")
     # 気力が尽きたら落ちる
     dropped = b.get("dropped_at") and t - datetime.fromisoformat(b["dropped_at"]) < DROP_GAP
     if b["energy"] < LOW_ENERGY and not dropped:
@@ -160,16 +211,26 @@ def after_baito(b, t):
 DID_MAX_YEN = 3000   # 会話の中で言った出費は、1回これまで
 
 
-def did(b, t, what, yen=0, ate=False):
+def did(b, t, what, yen=0, ate=False, treat=False):
     """会話の中で「今やった」と言った行動を、本当にやったことにする（10-11 ユーザー「話題を出すにも行動は要る」）。
-    寝ている間は何もしない。出費は残高と DID_MAX_YEN で切る。出来事の文を返す（やらなかったら None）。"""
+    寝ている間は何もしない。出費は残高と DID_MAX_YEN で切る。出来事の文を返す（やらなかったら None）。
+    treat は人に奢ってもらった（0円。1日 TREATS_PER_DAY 回まで。友人の案「奢られるシステムが無い」10-14）。"""
     if b["asleep"] or not what:
         return None
+    if treat:
+        tr = b.get("treats") or {}
+        if tr.get("day") != _day(t):
+            tr = {"day": _day(t), "n": 0}
+        if tr["n"] >= TREATS_PER_DAY:
+            return None
+        tr["n"] += 1
+        b["treats"] = tr
+        yen = 0
     yen = max(0, min(int(yen or 0), DID_MAX_YEN, b["money"]))
     if ate:
         _eat(b, yen, t)
     else:
-        b["money"] -= yen
+        _spend(b, yen, t)
     return f"{what}（{yen:,}円）" if yen else what
 
 

@@ -28,7 +28,7 @@ KEEP_N = 10
 BANDS = [(50, "仲いい"), (15, "好き"), (-14, "ふつう"), (-49, "気まずい"), (-100, "苦手")]
 
 # 起きたこと → 増減。「me」はナギ自身への言動、「friend」「close」はナギが好き／仲いい相手への言動
-DELTA = {("attack", "me"): -8, ("support", "me"): 6, ("joke", "me"): 2, ("belittle", "me"): -1,
+DELTA = {("attack", "me"): -8, ("support", "me"): 6, ("joke", "me"): 2, ("belittle", "me"): -1, ("treat", "me"): 3,
          ("belittle", "close"): -1,
          ("attack", "close"): -8, ("support", "close"): 4,
          ("attack", "friend"): -4, ("support", "friend"): 2}
