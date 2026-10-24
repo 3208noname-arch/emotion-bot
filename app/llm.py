@@ -7,6 +7,7 @@ from datetime import datetime
 import aiohttp
 
 import persona
+from app.jev import jev_many
 from app.store import CONFIG, now
 from engine import decide
 
@@ -81,6 +82,25 @@ def line(m, t):
     return f"［{decide.ago(sec)}］{who}: {m['text']}"
 
 
+# 自分の発言に責任を持つ（10-24）。「3万で飯食わしてやる」（和食の台詞を代わりに言った）、
+# 「話そうか」の打ち間違いを指摘されて「分けるって言ってんじゃん、なんで逆ギレ」と相手のせいにした
+ACCOUNT_GUIDE = ("あなたはナギ。相手の台詞を代わりに言わない。自分の発言には責任を持ち、【あなたが最近言ったこと】と食い違うことを言わない。"
+                 "「お前が言った」と指摘されたら【あなたが最近言ったこと】を確かめ、言っていたら認める（打ち間違いなら打ち間違えたと言う）。"
+                 "言っていないことは認めない。自分の言ったことを相手のせいにしない")
+POV_Q = ("【ナギの返事の案】は、N4Gi（ナギ）自身の立場から言える発言として筋が通っているか。"
+         "相手の台詞を代わりに言っていない、自分（あなた）の最近の発言や会話の事実と食い違っていない、"
+         "自分の言ったことを相手のせいにしていない。")
+POV_MIN = 0.65   # 実測で、悪い返事 0.45〜0.55、良い返事 0.72〜0.88
+
+
+async def pov_ok(log_lines, mine, msgs):
+    """送る前に、立場と自分の発言の取り違えが無いかを Jev で確かめる。Jev が失敗したら通す（棄権）。"""
+    mine_txt = "\n".join(mine) or "（無し）"
+    p = await jev_many(f"【会話】\n{log_lines}\n【あなたが最近言ったこと】\n{mine_txt}\n"
+                       f"【ナギの返事の案】\n" + "\n".join(f"あなた（N4Gi）: {m}" for m in msgs), {"q": POV_Q})
+    return p.get("q") is None or p["q"] >= POV_MIN, p.get("q")
+
+
 MOOD_GUIDE = "口調・返事の長さ・食いつき方ににじませるだけにする。「機嫌が悪い」など気分の言葉そのものは口に出さない"
 
 
@@ -125,7 +145,8 @@ def parse_did(text):
             "by": by}
 
 
-async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None, mood_text=None, on_taste=None, tastes=None):
+async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None, mood_text=None, on_taste=None, tastes=None,
+                mine=()):
     """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。events は最近の出来事の行。
     on_did(what, yen, ate) は、返事の中で「今やった」と言った行動を受け取る。
     on_taste(name, like) は、返事の中で口にした好き嫌いを受け取る。tastes は今の自分の好き嫌い（言葉）。"""
@@ -143,6 +164,7 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
     turn += "\n【最近の出来事】" + ("／".join(events) or "特に無し") + "\n【行動】" + DID_GUIDE
     if tastes:
         turn += "\n【自分の好き嫌い】" + tastes + "\n【好き嫌い】" + TASTE_GUIDE
+    turn += "\n【あなたが最近言ったこと（古い順）】\n" + ("\n".join(mine) or "（無し）") + "\n【責任】" + ACCOUNT_GUIDE
     if note:
         turn += "\n【補足】" + note
     if kind == "reaction":
@@ -158,6 +180,15 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
         if not text:
             return None
         out = parse(text, kind, target_text)
+        if out and kind != "reaction":
+            ok, score = await pov_ok(log_lines, mine, out)
+            if not ok:
+                log.info("立場か自分の発言を取り違えている（%.2f）。書き直す: %s", score, " ｜ ".join(out))
+                messages = messages + [{"role": "assistant", "content": text},
+                                       {"role": "user", "content": "【書き直し】この案は、立場か事実を取り違えている"
+                                        "（相手の台詞を代わりに言っている、自分の最近の発言と食い違う、自分の言ったことを相手のせいにしている、のどれか）。"
+                                        "あなた（ナギ）の立場で、自分の発言に責任を持って書き直す。同じJSONの形で"}]
+                continue
         if out:
             d = parse_did(text) if on_did and kind != "reaction" else None
             if d:

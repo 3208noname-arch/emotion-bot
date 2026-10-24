@@ -22,7 +22,7 @@ from engine import body, decide
 
 log = logging.getLogger("minato")
 
-RECENT = 20          # 覚えておく直近の発言数（LLMに渡す）
+RECENT = 40          # 覚えておく直近の発言数（LLMに渡す）。縦画面のモニター1枚ぶん（10-24 ユーザー。20件だと自分の発言が流れた）
 SHARE_WINDOW = 12    # 発言シェアを数える範囲
 QUIET_SEC = 6        # 最後の発言からこれだけ静かになったら判断する
 MAX_WAIT_SEC = 20    # 会話が続いていても、これだけ溜めたら判断する
@@ -203,7 +203,7 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
             return
         t = now()
         out = await write(list(self.recent), target, kind, act["label"], note,
-                          body_text=body.as_feelings(self.body, now()), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t), on_taste=self.taste, tastes=self.taste_words())
+                          body_text=body.as_feelings(self.body, now()), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t), on_taste=self.taste, tastes=self.taste_words(), mine=self.my_lines(t))
         if not out:
             return
         log.info("返信先「%s」→ %s", target["text"][:60], out if kind == "reaction" else " ｜ ".join(out))
