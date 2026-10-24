@@ -7,13 +7,14 @@ from datetime import datetime, timedelta
 from app.jev import jev_many
 from app.store import ROOT, now
 from app import __version__
-from engine import body, mechs, mood, policy, topics
+from engine import affinity, body, mechs, mood, policy, topics
 
 log = logging.getLogger("minato")
 
 TOPICS_PATH = os.path.join(ROOT, "topics.json")   # Web UI の「話題の好き嫌い」が書く
 TOPIC_AGAIN = timedelta(minutes=30)               # 同じ話題で続けて動かさない（話題が続くたびに積み上がるため）
 PEOPLE_KEEP = timedelta(hours=2)                   # 人の反応による気分の動きの記録（経験と予想の答えに使う）
+SETTLE = affinity.AFTER_WAIT                       # 枠（10分）が終わってから、遅れて届く判定を待つ時間
 
 
 def load_topics_file():
@@ -49,8 +50,10 @@ class MoodMixin:
     def mood_words(self, t):
         return mood.as_words(self.mood, self.mood_settle(t))
 
-    def mood_hit(self, delta, why, people=True):
-        """気分を動かす。people は人の言動によるものか（話題・体ではない）。人の分は、経験と予想の答えに使う。"""
+    def mood_hit(self, delta, why, people=True, said_at=None):
+        """気分を動かす。people は人の言動によるものか（話題・体ではない）。人の分は、経験と予想の答えに使う。
+        said_at はその言動の発言時刻。**判定した時刻で残すと、10分の枠の外に出て答えがほぼ0になっていた**
+        （好感度は後ろの会話を待ってから読むため。10-24）。"""
         if not delta:
             return
         t = now()
@@ -60,7 +63,7 @@ class MoodMixin:
             log.info("気分: %s %+.1f → %.0f（%s）", why, d, self.mood["v"], mood.band(self.mood["v"]))
             if people:
                 log_ = [x for x in self.s.get("people_log", []) if t - datetime.fromisoformat(x[0]) <= PEOPLE_KEEP]
-                self.s["people_log"] = log_ + [[t.isoformat(timespec="seconds"), round(d, 1)]]
+                self.s["people_log"] = log_ + [[(said_at or t).isoformat(timespec="seconds"), round(d, 1)]]
 
     def people_felt(self, start, minutes):
         """start から minutes 分の間に、人の反応で気分がどれだけ動いたか。"""
@@ -81,7 +84,7 @@ class MoodMixin:
     def close_episodes(self, t):
         """話題が出てから EPISODE_MIN 分経ったものを閉じ、経験で座標を動かす。"""
         eps = self.s.get("episodes", [])
-        done = [e for e in eps if t - datetime.fromisoformat(e["at"]) >= timedelta(minutes=topics.EPISODE_MIN)]
+        done = [e for e in eps if t - datetime.fromisoformat(e["at"]) >= timedelta(minutes=topics.EPISODE_MIN) + SETTLE]
         if not done:
             return
         self.s["episodes"] = [e for e in eps if e not in done]
@@ -124,7 +127,7 @@ class MoodMixin:
     def close_policy(self, t):
         pol = self.s.setdefault("policy", {})
         pend = pol.get("pending", [])
-        done = [p for p in pend if t - datetime.fromisoformat(p["at"]) >= timedelta(minutes=policy.WINDOW_MIN)]
+        done = [p for p in pend if t - datetime.fromisoformat(p["at"]) >= timedelta(minutes=policy.WINDOW_MIN) + SETTLE]
         if not done:
             return
         pol["pending"] = [p for p in pend if p not in done]

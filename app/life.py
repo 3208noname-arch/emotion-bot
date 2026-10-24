@@ -81,6 +81,8 @@ class LifeMixin:
         """返事の中で「今やった」と言った行動を、本当にやったことにする（出来事に残し、残高を減らす）。
         by は奢ってくれた人（0円で食べ、その人への好感度と気分が上がる。1日2回まで）。"""
         t = now()
+        if by and not ate:
+            by = None       # 奢りは食べ物・飲み物を受け取った時だけ（「カラオケ・かきの奢り」が付いたことがある）
         ev = body.did(self.body, t, what, yen, ate, treat=bool(by))
         if ev and by:
             ev = f"{by}に{ev}を奢ってもらった"

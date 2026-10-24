@@ -8,7 +8,7 @@ import discord
 import persona
 from app.jev import jev, jev_many
 from app.llm import post
-from app.store import now, save_state
+from app.store import JST, now, save_state
 from engine import affinity, decide, mood, names
 
 log = logging.getLogger("minato")
@@ -47,7 +47,7 @@ LIKE_ME_Q = "発言者は、この会話の中でナギ（N4Gi）のことを本
 # 返信もメンションも無い発言でも、直前 FLOW_LOOK 件にナギの発言か名前が FLOW_GAP 秒以内にあれば候補に積み、
 # 読む時に「ナギに向けた・ナギのことを言った発言か」も聞く（大人数の会話では返信を付けずに言うことが多い。
 # ポン酢の「やーいガキ」が漏れていた。10-12）
-FLOW_GAP = 300
+FLOW_GAP = 1800   # 5分だと、13分後の「頭おかしいんじゃねえかおめえ」が漏れた（10-22）
 FLOW_LOOK = 4
 ABOUT_ME_Q = "【判定する発言】は、ナギ（N4Gi）に向けた、またはナギのことを言った発言か（ナギ以外の人どうしのやりとりなら含めない）。"
 
@@ -145,12 +145,13 @@ class LearningMixin:
             quote = m.clean_content
             kind = affinity.judge(p.get("attack"), p.get("tease"), p.get("support"), p.get("joke"), p.get("belittle"))
             name = m.author.display_name
+            said = m.created_at.astimezone(JST).replace(tzinfo=None)
             if me:
                 d = affinity.apply(author, affinity.DELTA[(kind, "me")], t, f"ナギに{kind}", quote) if kind else 0
                 if kind:
-                    self.mood_hit(mood.people_delta(kind, "me"), mood.people_reason(kind, name))
+                    self.mood_hit(mood.people_delta(kind, "me"), mood.people_reason(kind, name), said_at=said)
                 else:
-                    self.mood_hit(mood.chat_delta(author["v"]), f"{name}に話しかけられた")
+                    self.mood_hit(mood.chat_delta(author["v"]), f"{name}に話しかけられた", said_at=said)
                 if not d and kind is None:
                     d = affinity.chat(author, t)
             else:
@@ -158,10 +159,10 @@ class LearningMixin:
                 d = 0
                 if (kind, rel) in affinity.DELTA:
                     d = affinity.apply(author, affinity.DELTA[(kind, rel)], t, f"{target.display_name}に{kind}", quote)
-                    self.mood_hit(mood.people_delta(kind, rel), mood.people_reason(kind, target.display_name, by=name))
+                    self.mood_hit(mood.people_delta(kind, rel), mood.people_reason(kind, target.display_name, by=name), said_at=said)
                 if p.get("me", 0) >= affinity.TRUE:
                     d += affinity.apply(author, affinity.DELTA[("support", "me")], t, "ナギを庇った", quote)
-                    self.mood_hit(mood.people_delta("support", "me"), mood.people_reason("support", name))
+                    self.mood_hit(mood.people_delta("support", "me"), mood.people_reason("support", name), said_at=said)
             if d:
                 self.used("likes")
             save_state(self.s)
