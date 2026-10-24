@@ -204,6 +204,7 @@ async def mechs(_):
         "likes": f"{len(likes)}人・" + "、".join(f"{p['display']}{round(p['v']):+d}" for p in
                                                   sorted(likes.values(), key=lambda p: -p["v"])[:3]),
         "names": f"{len(s.get('names', {}))}人分",
+        "anger": "、".join(f"{r.get('display')}{round(r['v'])}" for r in s.get("anger", {}).values()) or "誰にも怒っていない",
         "experience": f"見ている話題 {len(s.get('episodes', []))}件",
         "policy_learn": "予想 " + ("、".join(f"{k}{v:+.1f}" for k, v in s.get("policy", {}).get("q", {}).items()) or "まだ無し"),
     }

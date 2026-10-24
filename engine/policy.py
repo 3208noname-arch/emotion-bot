@@ -29,10 +29,11 @@ def heat_of(arousal):
     return max(0.0, min(1.0, (arousal - HEAT_FROM) / (HEAT_FULL - HEAT_FROM)))
 
 
-def logits(heat, valence, mood_v, q):
-    """heat 0〜1（話題の覚醒から）、valence −1〜1（話題の快。話題が無ければ0）、mood_v 気分、q 型ごとの予想。"""
+def logits(heat, valence, mood_v, q, grudge=0.0):
+    """heat 0〜1（話題の覚醒から）、valence −1〜1（話題の快。話題が無ければ0）、mood_v 気分、q 型ごとの予想。
+    grudge は発言者への怒りから来る罰（混ざる側のロジットから引く。engine/anger.POLICY_PER）。"""
     return {k: BASE[k] + HEAT[k] * heat + SIZE[k] * (VALENCE_W * valence + MOOD_W * mood_v) + Q_W * q.get(k, 0.0)
-            for k in KINDS}
+            - (grudge if k != "none" else 0.0) for k in KINDS}
 
 
 def probs(lg):

@@ -13,12 +13,13 @@ from app.jev import JEV_INVITE, jev, jev_interest
 from app.learning import LearningMixin
 from app.life import LifeMixin
 from app.llm import write
+from app.anger import AngerMixin
 from app.mood import MoodMixin
 from app.rating import RatingMixin
 from app.snapshot import SnapshotMixin
 from app.status import StatusMixin
 from app.store import CONFIG, JST, load_state, now, save_state
-from engine import body, decide
+from engine import anger, body, decide
 
 log = logging.getLogger("minato")
 
@@ -29,7 +30,7 @@ MAX_WAIT_SEC = 20    # 会話が続いていても、これだけ溜めたら判
 ANSWERED_KEEP = 50   # 返事済みの発言IDをこれだけ覚えておく（同じ発言に二度返さない）
 
 
-class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, SnapshotMixin, discord.Client):
+class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, AngerMixin, SnapshotMixin, discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -173,7 +174,8 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
                 log.info("その場の誰かへの呼びかけ（%.2f）→ 話しかけられた扱い", invite)
         if decide.free_choice(addressed, share, humans, act["state"], self.body["energy"]):
             # 決まりごとに当たらなければ、混ざり方を居心地の予想で選ぶ（10-13）
-            kind, probs = self.choose_by_comfort(hit, interest, random.random())
+            kind, probs = self.choose_by_comfort(hit, interest, random.random(),
+                                                 grudge=self.anger_of(target["author_id"]) * anger.POLICY_PER)
         else:
             kind = decide.choose(addressed, interest, share, humans, act["state"], random.random(),
                                  self.body["energy"])
@@ -203,7 +205,8 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Snap
             return
         t = now()
         out = await write(list(self.recent), target, kind, act["label"], note,
-                          body_text=body.as_feelings(self.body, now()), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t), on_taste=self.taste, tastes=self.taste_words(), mine=self.my_lines(t))
+                          body_text=body.as_feelings(self.body, now()), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t), on_taste=self.taste, tastes=self.taste_words(), mine=self.my_lines(t),
+                          anger_text=self.anger_words(target.get("author_id")))
         if not out:
             return
         log.info("返信先「%s」→ %s", target["text"][:60], out if kind == "reaction" else " ｜ ".join(out))

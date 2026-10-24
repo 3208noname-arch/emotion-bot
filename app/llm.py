@@ -54,7 +54,7 @@ def asks_ai(text):
     return bool(AI_Q.search(text))
 
 
-def parse(text, kind, target_text=""):
+def parse(text, kind, target_text="", curt_ok=False):
     """型に合った中身を取り出す。合わなければ None。"""
     try:
         obj = json.loads(text)
@@ -64,7 +64,8 @@ def parse(text, kind, target_text=""):
         e = obj.get("reaction")
         return e if e in persona.REACTIONS else None
     msgs = [m.strip() for m in obj.get("messages") or [] if isinstance(m, str) and m.strip()]
-    if not msgs or any(POLITE.search(m) or SELF_NAME.search(m) for m in msgs) or all(CURT.match(m) for m in msgs):
+    if not msgs or any(POLITE.search(m) or SELF_NAME.search(m) for m in msgs) or (
+            not curt_ok and all(CURT.match(m) for m in msgs)):   # 怒っている相手には「うるせえ」だけも許す
         return None
     if asks_ai(target_text) and any(HUMAN_CLAIM.search(m) for m in msgs):
         return None   # 人間だと偽らない（このサーバーではAIが混ざっていると告知している）
@@ -146,7 +147,7 @@ def parse_did(text):
 
 
 async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None, mood_text=None, on_taste=None, tastes=None,
-                mine=()):
+                mine=(), anger_text=None):
     """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。events は最近の出来事の行。
     on_did(what, yen, ate) は、返事の中で「今やった」と言った行動を受け取る。
     on_taste(name, like) は、返事の中で口にした好き嫌いを受け取る。tastes は今の自分の好き嫌い（言葉）。"""
@@ -161,6 +162,8 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
         turn += "\n【体の状態】" + body_text
     if mood_text:
         turn += "\n【気分】" + mood_text + "。" + MOOD_GUIDE
+    if anger_text:
+        turn += "\n【返信先への怒り】" + anger_text
     turn += "\n【最近の出来事】" + ("／".join(events) or "特に無し") + "\n【行動】" + DID_GUIDE
     if tastes:
         turn += "\n【自分の好き嫌い】" + tastes + "\n【好き嫌い】" + TASTE_GUIDE
@@ -179,7 +182,7 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
         text = await post(messages)
         if not text:
             return None
-        out = parse(text, kind, target_text)
+        out = parse(text, kind, target_text, curt_ok=bool(anger_text))
         if out and kind != "reaction":
             ok, score = await pov_ok(log_lines, mine, out)
             if not ok:

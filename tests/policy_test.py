@@ -30,6 +30,8 @@ ok(good["none"] < 0.75 < bad["none"], "機嫌が良いと混ざりやすく、�
 ok(P.probs(P.logits(0, 0, 0, {"short": 10}))["short"] > 0.10, "混ざって良かった型は選ばれやすくなる")
 
 ok(P.pick(P.logits(0, 0, 0, {}), 0.0) == "none" and P.pick(P.logits(0, 0, 0, {}), 0.999) in P.KINDS, "乱数で選ぶ")
+ok(P.probs(P.logits(1, 0, 0, {}, grudge=2))["none"] > P.probs(P.logits(1, 0, 0, {}))["none"],
+   "怒っている相手の発言には混ざりにくい")
 q = {}
 P.update(q, "short", 5)
 ok(q["short"] == 0.5, "予想は気分の動きへ1割寄せる")

@@ -108,7 +108,7 @@ class MoodMixin:
     def policy_q(self):
         return self.s.setdefault("policy", {}).setdefault("q", {})
 
-    def choose_by_comfort(self, hit, interest, r):
+    def choose_by_comfort(self, hit, interest, r, grudge=0.0):
         """話題の熱と快・今の気分・型ごとの予想から、混ざり方を選ぶ。(型, 確率) を返す。"""
         self.used("policy")
         if hit:
@@ -117,7 +117,7 @@ class MoodMixin:
         else:   # 話題の図に当たらなければ、Jev の「身近な話題か」で熱を決める
             heat, valence = (1.0 if interest is not None and interest >= 0.70 else 0.0), 0.0
         self.mood_settle(now())
-        lg = policy.logits(heat, valence, self.mood["v"], self.policy_q)
+        lg = policy.logits(heat, valence, self.mood["v"], self.policy_q, grudge)
         return policy.pick(lg, r), {k: round(v, 2) for k, v in policy.probs(lg).items()}
 
     def note_joined(self, kind, t):

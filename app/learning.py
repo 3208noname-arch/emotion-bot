@@ -44,6 +44,10 @@ LIKE_QS = {"attack": "発言者は【相手】を本気でけなしている、�
            "belittle": "発言者は【相手】を見下したり、子ども扱い・バカ扱いしたりしているか"
                        "（ふざけた調子や「かわいい」を添えた言い方でも含む）。"}
 LIKE_ME_Q = "発言者は、この会話の中でナギ（N4Gi）のことを本心から庇っている、褒めている、または気にかけているか。"
+# 怒っている相手の発言では、謝っているかと謝り方の軽さも読む（10-24 ユーザー「謝りの軽さも判定に入れたい」）
+APOLOGY_QS = {"apology": "発言者は【相手】（ナギ）に、自分の言ったことやしたことを謝っているか。",
+              "light": "発言者の謝り方は、軽い・ふざけた・形だけのものか（「ごめんw」「すまんすまん」「はいはいごめんね」など）。"
+                       "本気で反省して謝っているなら当てはまらない。"}
 # 返信もメンションも無い発言でも、直前 FLOW_LOOK 件にナギの発言か名前が FLOW_GAP 秒以内にあれば候補に積み、
 # 読む時に「ナギに向けた・ナギのことを言った発言か」も聞く（大人数の会話では返信を付けずに言うことが多い。
 # ポン酢の「やーいガキ」が漏れていた。10-12）
@@ -134,6 +138,8 @@ class LearningMixin:
                 qs["me"] = LIKE_ME_Q
             if q.get("guess"):
                 qs["about_me"] = ABOUT_ME_Q
+            if me and self.anger_of(m.author.id):
+                qs.update(APOLOGY_QS)     # 怒っている相手なら、謝っているか・謝り方の軽さも読む
             p = await jev_many(f"【発言者】{m.author.display_name}\n【相手】{who}\n【直前の会話】\n{fmt(q['before'])}\n"
                                f"【判定する発言】\n{m.author.display_name}: {m.clean_content}\n"
                                f"【その後の会話】\n{fmt(after)}", qs)
@@ -146,6 +152,10 @@ class LearningMixin:
             kind = affinity.judge(p.get("attack"), p.get("tease"), p.get("support"), p.get("joke"), p.get("belittle"))
             name = m.author.display_name
             said = m.created_at.astimezone(JST).replace(tzinfo=None)
+            if me and kind in ("attack", "belittle"):
+                self.angered(m.author.id, name, kind, quote)
+            if me and "apology" in p:
+                self.apologized(m.author.id, name, p.get("apology"), p.get("light"), said)
             if me:
                 d = affinity.apply(author, affinity.DELTA[(kind, "me")], t, f"ナギに{kind}", quote) if kind else 0
                 if kind:
