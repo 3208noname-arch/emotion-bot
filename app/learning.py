@@ -44,6 +44,8 @@ LIKE_QS = {"attack": "発言者は【相手】を本気でけなしている、�
            "belittle": "発言者は【相手】を見下したり、子ども扱い・バカ扱いしたりしているか"
                        "（ふざけた調子や「かわいい」を添えた言い方でも含む）。"}
 LIKE_ME_Q = "発言者は、この会話の中でナギ（N4Gi）のことを本心から庇っている、褒めている、または気にかけているか。"
+TEACH_Q = ("発言者は【相手】（ナギ）に、知識・事実・お約束（ネタの返し方など）を教えている、"
+           "またはナギの言ったことの間違いを正しているか。")
 # 怒っている相手の発言では、謝っているかと謝り方の軽さも読む（10-24 ユーザー「謝りの軽さも判定に入れたい」）
 APOLOGY_QS = {"apology": "発言者は【相手】（ナギ）に、自分の言ったことやしたことを謝っているか。",
               "light": "発言者の謝り方は、軽い・ふざけた・形だけのものか（「ごめんw」「すまんすまん」「はいはいごめんね」など）。"
@@ -138,6 +140,8 @@ class LearningMixin:
                 qs["me"] = LIKE_ME_Q
             if q.get("guess"):
                 qs["about_me"] = ABOUT_ME_Q
+            if me:
+                qs["teach"] = TEACH_Q
             if me and self.anger_of(m.author.id):
                 qs.update(APOLOGY_QS)     # 怒っている相手なら、謝っているか・謝り方の軽さも読む
             p = await jev_many(f"【発言者】{m.author.display_name}\n【相手】{who}\n【直前の会話】\n{fmt(q['before'])}\n"
@@ -154,6 +158,9 @@ class LearningMixin:
             said = m.created_at.astimezone(JST).replace(tzinfo=None)
             if me and kind in ("attack", "belittle"):
                 self.angered(m.author.id, name, kind, quote)
+            if me and p.get("teach", 0) >= affinity.TRUE:
+                await self.learn_lesson(f"【直前の会話】\n{fmt(q['before'])}\n【教えた発言】{name}: {quote}\n"
+                                        f"【その後の会話】\n{fmt(after)}", name, "会話")
             if me and "apology" in p:
                 self.apologized(m.author.id, name, p.get("apology"), p.get("light"), said)
             if me:

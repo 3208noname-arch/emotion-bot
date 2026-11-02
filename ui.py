@@ -204,6 +204,7 @@ async def mechs(_):
         "likes": f"{len(likes)}人・" + "、".join(f"{p['display']}{round(p['v']):+d}" for p in
                                                   sorted(likes.values(), key=lambda p: -p["v"])[:3]),
         "names": f"{len(s.get('names', {}))}人分",
+        "lessons": f"{len(load(LESSONS, {'items': []})['items'])}件",
         "anger": "、".join(f"{r.get('display')}{round(r['v'])}" for r in s.get("anger", {}).values()) or "誰にも怒っていない",
         "experience": f"見ている話題 {len(s.get('episodes', []))}件",
         "policy_learn": "予想 " + ("、".join(f"{k}{v:+.1f}" for k, v in s.get("policy", {}).get("q", {}).items()) or "まだ無し"),
@@ -217,6 +218,22 @@ async def mechs(_):
     return web.json_response({"items": items, "since": min((r["first"] for r in reg.values()), default=None)})
 
 
+LESSONS = os.path.join(HERE, "lessons.json")
+
+
+async def lessons_get(_):
+    return web.json_response(load(LESSONS, {"items": []}))
+
+
+async def lessons_delete(req):
+    """間違って覚えたものを消す。"""
+    lid = int(req.match_info["id"])
+    obj = load(LESSONS, {"items": []})
+    obj["items"] = [x for x in obj["items"] if x.get("id") != lid]
+    save(LESSONS, obj)
+    return web.json_response(obj)
+
+
 async def index(_):
     return web.FileResponse(os.path.join(HERE, "web", "ui.html"))
 
@@ -224,7 +241,8 @@ async def index(_):
 def app():
     a = web.Application()
     a.add_routes([web.get("/", index), web.get("/api/state", state), web.get("/api/ratings", rating_list),
-                  web.get("/api/log", log_tail), web.get("/api/info", info), web.get("/api/mechs", mechs), web.get("/api/topics", topics_get), web.put("/api/topics", topics_put)])
+                  web.get("/api/log", log_tail), web.get("/api/info", info), web.get("/api/mechs", mechs), web.get("/api/topics", topics_get),
+                  web.get("/api/lessons", lessons_get), web.delete("/api/lessons/{id}", lessons_delete), web.put("/api/topics", topics_put)])
     return a
 
 

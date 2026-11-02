@@ -116,6 +116,12 @@ b["at"] = D17.replace(hour=15).isoformat()
 ev = at(b, D17.replace(hour=15, minute=1))
 ok(not ev and b["hunger"] > 75, "カップ麺も買えなければ食べられない")
 
+# 財布
+b = B.new(D17); b["money"] = 52700; b["paid"] = b["sent"] = b["billed"] = D17.strftime("%Y-%m")
+ok(B.wallet(b, D17) == "残高 約53,000円（今日あと6,600円くらい使ってよい）", "残高はいつも丸めて渡す")
+b["money"] = 1500
+ok(B.wallet(b, D17) == "金欠（残り1,500円）", "金欠ならそう言う")
+
 # 奢ってもらう
 b = B.new(T); b["money"] = 300; b["hunger"] = 80
 ok(B.did(b, T, "唐揚げ", 900, ate=True, treat=True) == "唐揚げ" and b["money"] == 300 and b["hunger"] == 0, "奢りは0円で食べる")

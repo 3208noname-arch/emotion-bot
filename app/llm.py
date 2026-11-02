@@ -102,6 +102,12 @@ async def pov_ok(log_lines, mine, msgs):
     return p.get("q") is None or p["q"] >= POV_MIN, p.get("q")
 
 
+TIME_GUIDE = ("時間帯（朝・昼・夜）と曜日は【今】だけで決める。明日の予定は明日のこと。"
+              "会話ログの古い発言の時間帯を引きずらない。【この先1週間の予定】に無いシフトや予定を作らない")
+STALE_SEC = 2 * 3600   # 直近の会話がこれより古ければ「もう終わっている」と添える
+LESSON_GUIDE = "教わったことは事実として扱い、関係する時は使う（言われたら思い出す）。食い違うことを言わない"
+
+
 MOOD_GUIDE = "口調・返事の長さ・食いつき方ににじませるだけにする。「機嫌が悪い」など気分の言葉そのものは口に出さない"
 
 
@@ -147,7 +153,7 @@ def parse_did(text):
 
 
 async def write(recent, target, kind, pres, note=None, body_text=None, guide="", events=(), on_did=None, mood_text=None, on_taste=None, tastes=None,
-                mine=(), anger_text=None):
+                mine=(), anger_text=None, lessons=()):
     """target が None なら誰かへの返事ではない（抜ける・戻る時の独り言）。events は最近の出来事の行。
     on_did(what, yen, ate) は、返事の中で「今やった」と言った行動を受け取る。
     on_taste(name, like) は、返事の中で口にした好き嫌いを受け取る。tastes は今の自分の好き嫌い（言葉）。"""
@@ -155,7 +161,13 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
     log_lines = "\n".join(line(m, t) for m in recent)
     to = (f"【返信先】\n{line(target, t)}" if target else
           "【返信先】なし。誰かの発言への返事ではない。直近の会話に答えたり、自分の発言を繰り返したりしない")
-    turn = (f"【今の時刻】{t:%H:%M}\n【今日】{decide.day_text(t)}\n【直近の会話】\n{log_lines}\n\n{to}\n\n"
+    stale = ""
+    if recent and recent[-1].get("at"):
+        gap = (t - datetime.fromisoformat(recent[-1]["at"])).total_seconds()
+        if gap >= STALE_SEC:
+            stale = f"\n【注意】直近の会話は{decide.ago(gap)}で、もう終わっている。その時の時間帯や流れを引きずらない"
+    turn = (f"【今】{decide.now_text(t)}。{TIME_GUIDE}\n【今日】{decide.day_text(t)}\n"
+            f"【この先1週間の予定】{decide.week_text(t)}\n【直近の会話】\n{log_lines}{stale}\n\n{to}\n\n"
             f"【型】{KIND_LABEL[kind]}\n【今の様子】{pres}\n"
             f"【呼ばれ方】このサーバーでのあなたの表示名は {persona.NICK}。会話の中でそう呼ばれたら自分のこと")
     if body_text:
@@ -167,6 +179,8 @@ async def write(recent, target, kind, pres, note=None, body_text=None, guide="",
     turn += "\n【最近の出来事】" + ("／".join(events) or "特に無し") + "\n【行動】" + DID_GUIDE
     if tastes:
         turn += "\n【自分の好き嫌い】" + tastes + "\n【好き嫌い】" + TASTE_GUIDE
+    if lessons:
+        turn += "\n【教わったこと】\n" + "\n".join(f"- {x}" for x in lessons) + "\n" + LESSON_GUIDE
     turn += "\n【あなたが最近言ったこと（古い順）】\n" + ("\n".join(mine) or "（無し）") + "\n【責任】" + ACCOUNT_GUIDE
     if note:
         turn += "\n【補足】" + note

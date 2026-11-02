@@ -14,6 +14,7 @@ from app.learning import LearningMixin
 from app.life import LifeMixin
 from app.llm import write
 from app.anger import AngerMixin
+from app.lessons import LessonsMixin
 from app.mood import MoodMixin
 from app.rating import RatingMixin
 from app.snapshot import SnapshotMixin
@@ -30,7 +31,8 @@ MAX_WAIT_SEC = 20    # 会話が続いていても、これだけ溜めたら判
 ANSWERED_KEEP = 50   # 返事済みの発言IDをこれだけ覚えておく（同じ発言に二度返さない）
 
 
-class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, AngerMixin, SnapshotMixin, discord.Client):
+class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, AngerMixin, LessonsMixin, SnapshotMixin,
+             discord.Client):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -56,7 +58,10 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Ange
         parts = []
         ref = m.reference.resolved if m.reference else None
         if isinstance(ref, discord.Message):
-            parts.append(f"（{ref.author.display_name}への返信）")
+            age = (m.created_at - ref.created_at).total_seconds()
+            # 何日も前の発言に返信されても気付かなかった（10-27 評価「いつの話だよくらい言ってほしい」）
+            parts.append(f"（{ref.author.display_name}の{decide.ago(age)}の発言への返信）" if age >= 3600
+                         else f"（{ref.author.display_name}への返信）")
         elif m.mentions:
             # メンションは本文に「@名前」としか出ず、かき宛てを自分宛てと読んだことがある（10-14）
             parts.append(f"（{'・'.join(u.display_name for u in m.mentions)}宛て）")
@@ -205,8 +210,7 @@ class Minato(RatingMixin, LearningMixin, StatusMixin, LifeMixin, MoodMixin, Ange
             return
         t = now()
         out = await write(list(self.recent), target, kind, act["label"], note,
-                          body_text=body.as_feelings(self.body, now()), events=self.event_lines(t), on_did=self.did, mood_text=self.mood_words(t), on_taste=self.taste, tastes=self.taste_words(), mine=self.my_lines(t),
-                          anger_text=self.anger_words(target.get("author_id")))
+                          **self.inner(t, target.get("author_id")))
         if not out:
             return
         log.info("返信先「%s」→ %s", target["text"][:60], out if kind == "reaction" else " ｜ ".join(out))

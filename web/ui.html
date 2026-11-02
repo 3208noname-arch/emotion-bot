@@ -42,7 +42,7 @@ a{color:var(--acc)}
   <h1>ナギの様子 <span id="now" class="mute" style="font-size:13px;font-weight:400"></span></h1>
   <nav id="tabs">
     <button data-t="state" class="on">様子</button><button data-t="topics">話題の好き嫌い</button>
-    <button data-t="likes">好感度</button><button data-t="names">呼び名</button>
+    <button data-t="likes">好感度</button><button data-t="names">呼び名</button><button data-t="lessons">教わったこと</button>
     <button data-t="ratings">評価</button><button data-t="log">ログ</button><button data-t="mechs">仕組み</button><button data-t="info">情報</button>
   </nav>
 </header>
@@ -75,6 +75,7 @@ a{color:var(--acc)}
 
 <section id="likes"><div class="card"><div class="k">好感度（−100〜+100、最初は+20）。名前を押すと出来事が出ます。話しかけられた時の気分の動きには使っています（0.9.8〜）が、態度・口調にはまだ効いていません。</div><div id="likeList"></div></div></section>
 <section id="names"><div class="card"><div class="k">集まった呼び名（2人以上から合わせて3回で採用）</div><table id="nameTable"></table></div></section>
+<section id="lessons"><div class="card"><div class="k">ナギが教わったこと。会話で教わった分と、評価コメントの事実の訂正。間違って覚えたものは×で消せます（すぐ反映）。</div><table id="lessonTable"></table></div></section>
 <section id="ratings"><div class="card"><pre id="rsum"></pre></div><div class="card"><table id="rtable"></table></div></section>
 <section id="log"><div class="card"><div class="row" style="margin-bottom:8px"><button class="btn ghost" id="reloadLog">再読み込み</button>
   <input id="logFilter" placeholder="絞り込み（例: 判断 / 好感度 / 拾う）" style="max-width:320px"></div><pre id="logBox"></pre></div></section>
@@ -99,6 +100,7 @@ document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
   if (b.dataset.t === "log") loadLog();
   if (b.dataset.t === "info") loadInfo();
   if (b.dataset.t === "mechs") loadMechs();
+  if (b.dataset.t === "lessons") loadLessons();
 });
 
 async function loadState() {
@@ -162,6 +164,18 @@ function drawMood(md) {
   if (pts.length < 2) s += `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="var(--mute)">記録が溜まるまで待ってね（10分ごとに1点）</text>`;
   $("#moodPlot").innerHTML = s;
 }
+function drawLessons(items) {
+  $("#lessonTable").innerHTML = items.length ? "<tr><th>覚え書き</th><th>思い出す言葉</th><th>誰から</th><th>いつ</th><th></th></tr>" +
+    items.slice().reverse().map(x => `<tr><td>${esc(x.fact)}${x.n > 1 ? ` <span class="mute">×${x.n}</span>` : ""}</td>
+      <td class="mute">${esc((x.keywords || []).join("、"))}</td><td>${esc(x.by)}</td><td class="mute">${esc(x.at.slice(5, 16).replace("T", " "))}</td>
+      <td><button class="btn ghost" data-lesson="${x.id}" title="消す">×</button></td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
+}
+async function loadLessons() { drawLessons((await (await fetch("api/lessons")).json()).items); }
+$("#lessonTable").onclick = async e => {
+  const id = e.target.dataset.lesson;
+  if (!id || !confirm("この覚え書きを消す？")) return;
+  drawLessons((await (await fetch("api/lessons/" + id, {method: "DELETE"})).json()).items);
+};
 const MECH_LABEL = {on: ["使用中", "var(--pos)"], count: ["数えるだけ", "var(--warn)"], idle: ["しばらく動いていない", "var(--warn)"],
   never: ["まだ動いていない", "var(--mute)"], todo: ["未実装", "var(--mute)"]};
 async function loadMechs() {

@@ -13,9 +13,10 @@ class CommentModal(discord.ui.Modal, title="ひと言（空欄でもOK）"):
     comment = discord.ui.TextInput(label="どこが気になったか", style=discord.TextStyle.paragraph,
                                    required=False, max_length=300)
 
-    def __init__(self, rec):
+    def __init__(self, rec, on_saved=None):
         super().__init__()
         self.rec = rec
+        self.on_saved = on_saved
 
     async def on_submit(self, interaction):
         self.rec["comment"] = self.comment.value.strip()
@@ -24,6 +25,8 @@ class CommentModal(discord.ui.Modal, title="ひと言（空欄でもOK）"):
         log.info("評価: %s「%s」%s", name, self.rec["text"][:40],
                  f"— {self.rec['comment']}" if self.rec["comment"] else "")
         await interaction.response.send_message(f"「{name}」で記録した。ありがとう", ephemeral=True)
+        if self.on_saved:
+            await self.on_saved(self.rec, interaction.user.display_name)
 
 
 class ChoiceView(discord.ui.View):
@@ -43,17 +46,17 @@ class ChoiceView(discord.ui.View):
         return cb
 
 
-def rate_view(rec):
+def rate_view(rec, on_saved=None):
     """1段目: 評価を選ぶ。「感情がズレてる」のように詳しく分けるものは、2段目で中身を選んでからコメント欄を開く。"""
     async def pick_label(interaction, label):
         r = {**rec, "label": label}
         details = ratings.DETAILS.get(label)
         if not details:
-            await interaction.response.send_modal(CommentModal(r))
+            await interaction.response.send_modal(CommentModal(r, on_saved))
             return
 
         async def pick_detail(interaction2, detail):
-            await interaction2.response.send_modal(CommentModal({**r, "detail": detail}))
+            await interaction2.response.send_modal(CommentModal({**r, "detail": detail}, on_saved))
         await interaction.response.edit_message(content=f"> {rec['text'][:80]}\n「{label}」の中身はどれ？\n"
                                                         f"-# {ratings.DETAIL_HELP.get(label, '')}",
                                                 view=ChoiceView(details, pick_detail))
@@ -74,4 +77,4 @@ class RatingMixin:
             rec["state"] = self.recall(message.id)   # 喋った時の内部の値（評価と突き合わせる）
         await interaction.response.send_message(
             f"> {rec['text'][:80]}\nこの発言はどうだった？（あなたにしか見えません）",
-            view=rate_view(rec), ephemeral=True)
+            view=rate_view(rec, self.learn_from_rating), ephemeral=True)

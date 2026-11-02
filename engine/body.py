@@ -261,6 +261,14 @@ def as_numbers(b, t):
             f"気力{round(b['energy'])}/100 残高{b['money']:,}円")
 
 
+def wallet(b, t):
+    """LLMに渡す財布の中身。**金欠の時だけ渡していたら、10万円あっても「4桁しかねぇ」と言った**（10-27）。"""
+    if b["money"] < BROKE:
+        return f"金欠（残り{b['money']:,}円）"
+    left = max(0, int(allowance(b, t) - spent_today(b, t)))
+    return f"残高 約{round(b['money'], -3):,}円（今日あと{round(left, -2):,}円くらい使ってよい）"
+
+
 def as_feelings(b, t):
     """一番強い感覚を2つまで、体の感じとして。"""
     s = felt_sleepy(b, t)

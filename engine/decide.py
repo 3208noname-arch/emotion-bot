@@ -122,6 +122,25 @@ def _plan(d):
     return "、".join(items) or "授業もバイトも無い"
 
 
+DAY_PARTS = [(4, "深夜"), (7, "早朝"), (10, "朝"), (12, "昼前"), (15, "昼"), (18, "夕方"), (23, "夜"), (24, "深夜")]
+
+
+def now_text(t):
+    """LLMに渡す「今」。時間帯の言葉つき（13時に「今から寝る、日曜夜何してる？」と夜のつもりで話した。11-01）。"""
+    part = next(name for end, name in DAY_PARTS if t.hour < end)
+    s = f"{t.month}月{t.day}日（{WDAY[t.weekday()]}）の{part} {t:%H:%M}"
+    if t.hour < 4:
+        y = t - timedelta(days=1)
+        s += f"（{WDAY[y.weekday()]}曜の夜の続き）"
+    return s
+
+
+def week_text(t):
+    """この先1週間の予定（朝4時区切り）。今日と明日しか渡さず「今日から来週までフルで埋まってる」と作った（10-27）。"""
+    d0 = t - timedelta(hours=4)
+    return "／".join(f"{WDAY[(d0 + timedelta(days=i)).weekday()]}: {_plan(d0 + timedelta(days=i))}" for i in range(7))
+
+
 def day_text(t):
     """LLMに渡す日付と予定。**時刻だけだと、土日に1限の話をし、昼の「おはよう」を朝と取り違えた。**
     朝4時までは前日の夜として扱う（day_key と同じ区切り）。"""
