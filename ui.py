@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from aiohttp import web
 
-from engine import affinity, body, decide, mechs as mech, mood, ratings, snapshot
+from engine import affinity, anger, body, decide, mechs as mech, mood, ratings, snapshot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state.json")
@@ -75,7 +75,20 @@ async def state(_):
         "likes": likes,
         "mood": md,
         "names": s.get("names", {}),
+        "anger": anger_list(s, t),
     })
+
+
+def anger_list(s, t):
+    """人ごとの怒り（今の時刻まで冷ました値。読むだけ）。"""
+    out = []
+    for uid, r in json.loads(json.dumps(s.get("anger", {}))).items():
+        close = s.get("likes", {}).get(uid, {}).get("v", 0) >= anger.CLOSE_FROM
+        v = anger.cool(r, t, close)
+        if v >= anger.FORGET:
+            out.append({"display": r.get("display"), "v": round(v), "band": anger.band(v), "why": r.get("why"),
+                        "kind": r.get("kind")})
+    return sorted(out, key=lambda x: -x["v"])
 
 
 _timeline = {"at": None, "data": []}

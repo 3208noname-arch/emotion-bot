@@ -2,248 +2,419 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F2A44">
 <title>ナギの様子</title>
 <style>
-:root{--bg:#f6f6f4;--card:#fff;--fg:#1d1d1b;--mute:#6b6b66;--line:#e2e2dd;--acc:#3a6ea5;--pos:#2f8f5b;--neg:#c2453d;--warn:#b7791f}
-@media (prefers-color-scheme:dark){:root{--bg:#161615;--card:#1f1f1d;--fg:#ececea;--mute:#9a9a94;--line:#33332f;--acc:#7aa7d9;--pos:#5cc08a;--neg:#e2776f;--warn:#e0a84a}}
+/* 深夜の学食: 明るい側は学食の蛍光灯、暗い帯は窓の外の夜。目立たせるのは「いま」の帯だけにする */
+:root{
+  --bg:#EEF0F3;--surface:#FFFFFF;--ink:#1C2230;--mute:#5E6675;--line:#D9DDE3;
+  --acc:#2B6C8F;--night:#1F2A44;--night-ink:#F3F5FA;--night-mute:#AEB8CC;
+  --pos:#22704A;--neg:#AD3A30;--warn:#855709;--pos-night:#7DD3A4;--neg-night:#F29B90;
+  --tab-h:58px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#121722;--surface:#1A2030;--ink:#E8ECF3;--mute:#9AA3B5;--line:#2C3446;
+  --acc:#7FB6D6;--night:#24304C;--pos:#6CC795;--neg:#EE8A7E;--warn:#E3AE57;
+}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
-header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 16px;z-index:2}
-h1{font-size:17px;margin:0 0 6px}
-nav{display:flex;gap:6px;overflow-x:auto}
-nav button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:4px 12px;font:inherit;white-space:nowrap;cursor:pointer}
-nav button.on{background:var(--acc);border-color:var(--acc);color:#fff}
-main{max-width:960px;margin:0 auto;padding:16px}
-section{display:none}section.on{display:block}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.k{color:var(--mute);font-size:13px}.v{font-size:22px;font-weight:600}
-.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:4px}.bar i{display:block;height:100%;background:var(--acc)}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-th{color:var(--mute);font-weight:500}
-.pos{color:var(--pos)}.neg{color:var(--neg)}.mute{color:var(--mute)}
-input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 6px;width:100%}
-input[type=number]{width:72px}
-.btn{border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:6px;padding:6px 14px;font:inherit;cursor:pointer}
-.btn.ghost{background:transparent;color:var(--acc)}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-pre{white-space:pre-wrap;word-break:break-all;font-size:12px;line-height:1.5;margin:0;max-height:70vh;overflow:auto}
-svg text{fill:var(--mute);font-size:11px}
-.pt{cursor:grab}.pt text{fill:var(--fg);font-size:12px}
-details summary{cursor:pointer}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.65 "Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom))}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px;border-radius:4px}
 a{color:var(--acc)}
-#msg{min-height:1.4em}
+
+/* --- 上: 名前と時刻、グループ（PCだけ）、グループの中の小タブ --- */
+.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+.top-in{max-width:880px;margin:0 auto;padding:10px 16px 0;display:flex;align-items:baseline;gap:12px}
+.top h1{font-size:18px;font-weight:800;letter-spacing:.02em;margin:0}
+.top .clock{color:var(--mute);font-size:13px}
+.groups{display:flex;gap:4px;margin-left:auto}
+.subs{max-width:880px;margin:0 auto;padding:8px 16px 10px;display:flex;gap:6px;flex-wrap:wrap}
+.subs:empty{display:none}
+.sub{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;min-height:36px;cursor:pointer}
+.sub[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+/* --- 下: グループ（スマホ）。親指で届く位置 --- */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);
+  display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom)}
+.grp{border:0;background:none;height:var(--tab-h);cursor:pointer;color:var(--mute);font-size:13px;font-weight:600;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.grp svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+.grp[aria-selected=true]{color:var(--acc)}
+.groups .grp{height:auto;flex-direction:row;padding:6px 12px;border-radius:8px;font-size:14px}
+.groups .grp[aria-selected=true]{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.groups{display:none}
+@media (min-width:760px){.dock{display:none}.groups{display:flex}body{padding-bottom:0}}
+
+main{max-width:880px;margin:0 auto;padding:16px 16px 32px;overflow-wrap:anywhere}  /* 「〜〜〜…！！！」が折り返せずはみ出した */
+.view{display:none}.view.on{display:block}
+h2{font-size:15px;font-weight:700;margin:28px 0 8px}
+h2:first-child{margin-top:4px}
+.lead{color:var(--mute);font-size:13px;margin:0 0 10px;max-width:46em}
+.mute{color:var(--mute)}.pos{color:var(--pos)}.neg{color:var(--neg)}.warn{color:var(--warn)}
+
+/* --- いま: 夜の帯（このUIで唯一目立たせる所） --- */
+.night{background:var(--night);color:var(--night-ink);border-radius:14px;padding:18px 18px 10px;margin:4px 0 8px}
+.night .say{font-size:clamp(20px,5.4vw,26px);font-weight:800;line-height:1.45;margin:0}
+.night .why{color:var(--night-mute);font-size:13px;margin:6px 0 2px}
+.night svg{display:block;width:100%;margin-top:8px}
+.night .legend{color:var(--night-mute);font-size:12px;margin:2px 0 4px}
+.facts{color:var(--mute);font-size:13px;margin:6px 2px 0}
+
+/* 体: 4つの数を横に。メーターは細く */
+.body4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:18px 0 0}
+@media (max-width:420px){.body4{grid-template-columns:repeat(2,1fr)}}
+.m .k{color:var(--mute);font-size:12px}
+.m .v{font-size:22px;font-weight:800;line-height:1.2}
+.m .bar{height:4px;background:var(--line);border-radius:2px;margin-top:5px;overflow:hidden}
+.m .bar i{display:block;height:100%;background:var(--acc)}
+
+/* 一覧: 表の代わり。スマホでは1件を縦に積む */
+.rows{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.rows li{display:grid;grid-template-columns:4.2em 1fr auto;gap:2px 12px;padding:9px 2px;border-bottom:1px solid var(--line);align-items:baseline}
+.rows .t{color:var(--mute);font-size:13px}
+.rows .d{font-weight:700;text-align:right}
+.rows .sub2{grid-column:2/-1;color:var(--mute);font-size:13px}
+.rows .empty{display:block;color:var(--mute)}
+.chip{display:inline-block;font-size:12px;font-weight:700;padding:1px 8px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.x{border:1px solid var(--line);background:var(--surface);border-radius:8px;min-width:40px;min-height:40px;cursor:pointer;color:var(--mute)}
+.x:hover{color:var(--neg);border-color:var(--neg)}
+
+/* 評価・仕組み・教わったこと: 1件1ブロック */
+.items{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.items li{padding:12px 2px;border-bottom:1px solid var(--line)}
+.items .head{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--mute)}
+.items .body{margin:4px 0 0}
+.items .note{margin:4px 0 0;font-size:13px;color:var(--mute)}
+.items .act{float:right;margin-left:10px}
+.summary{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 12px}
+.summary div{font-size:13px;color:var(--mute)}
+.summary b{display:block;font-size:22px;color:var(--ink)}
+
+/* 人 */
+details.person{border-bottom:1px solid var(--line)}
+details.person:first-of-type{border-top:1px solid var(--line)}
+details.person summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:1fr auto auto;gap:12px;padding:11px 2px;align-items:baseline}
+details.person summary::-webkit-details-marker{display:none}
+details.person .score{font-weight:800;font-size:18px}
+details.person .rows{border-top:0;margin:0 0 10px 10px}
+
+/* 話題の図 */
+.plot{width:100%;display:block;touch-action:none;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.plot text{fill:var(--mute)}
+.pt{cursor:grab}.pt text{fill:var(--ink)}
+.edit{list-style:none;margin:12px 0 0;padding:0}
+.edit li{display:grid;grid-template-columns:1fr 5.2em 5.2em 40px;gap:6px;padding:6px 0;border-bottom:1px solid var(--line);align-items:center}
+.edit li .memo{grid-column:1/-1}
+.edit input{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-height:38px}
+.edit .hd{font-size:12px;color:var(--mute);border:0;padding-bottom:0}
+.btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.btn{border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:10px;padding:8px 16px;min-height:42px;cursor:pointer;font-weight:700}
+.btn.ghost{background:transparent;color:var(--acc)}
+@media (prefers-color-scheme:dark){.btn{color:#0E1420}}
+
+pre.log{white-space:pre-wrap;word-break:break-all;font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;margin:0;max-height:70vh;overflow:auto;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px}
+.search{width:100%;max-width:360px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-height:42px}
+.links a{display:inline-block;margin:0 14px 6px 0}
+@media (prefers-reduced-motion:no-preference){.view.on{animation:in .18s ease-out}@keyframes in{from{opacity:.4}to{opacity:1}}}
 </style>
 </head>
 <body>
-<header>
-  <h1>ナギの様子 <span id="now" class="mute" style="font-size:13px;font-weight:400"></span></h1>
-  <nav id="tabs">
-    <button data-t="state" class="on">様子</button><button data-t="topics">話題の好き嫌い</button>
-    <button data-t="likes">好感度</button><button data-t="names">呼び名</button><button data-t="lessons">教わったこと</button>
-    <button data-t="ratings">評価</button><button data-t="log">ログ</button><button data-t="mechs">仕組み</button><button data-t="info">情報</button>
-  </nav>
+<header class="top">
+  <div class="top-in">
+    <h1>ナギ</h1><span class="clock" id="clock"></span>
+    <nav class="groups" id="groupsTop" aria-label="グループ"></nav>
+  </div>
+  <div class="subs" id="subs" role="tablist" aria-label="表示"></div>
 </header>
+
 <main>
-<section id="state" class="on">
-  <div class="card"><div class="row"><div class="v" id="act"></div><span id="run" class="mute"></span></div>
-    <div class="mute" id="feel"></div><div class="mute" id="moodWords"></div></div>
-  <div class="grid card" id="bodyGrid"></div>
-  <div class="card"><div class="k">快・不快（気分）の推移。上が快、下が不快。直近24時間、10分ごと。縦の幅は動いた分に合わせて変わる（薄い帯が「ふつう」）</div>
-    <svg id="moodPlot" viewBox="0 0 640 180" style="width:100%;height:auto"></svg></div>
-  <div class="card"><div class="k">気分を動かした出来事（直近6時間）</div><table id="moodEvents"></table></div>
-  <div class="card"><div class="k">直近12時間の出来事（話題のネタ）</div><table id="events"></table></div>
+<!-- いま -->
+<section class="view" id="v-state">
+  <div class="night">
+    <p class="say" id="say">…</p>
+    <p class="why" id="why"></p>
+    <svg id="moodPlot" role="img" aria-label="直近24時間の快・不快"></svg>
+    <p class="legend">直近24時間の快・不快。上が快、下が不快。薄い帯が「ふつう」の範囲。点は気分を動かした出来事</p>
+  </div>
+  <p class="facts" id="facts"></p>
+  <div class="body4" id="body4"></div>
+  <h2>気分を動かした出来事（6時間）</h2><ul class="rows" id="moodEvents"></ul>
+  <h2>最近の出来事（12時間）</h2><ul class="rows" id="events"></ul>
+</section>
+<section class="view" id="v-mechs">
+  <p class="lead">感情の仕組みが、今どこまで入っているか。状態は、ナギが実際にその仕組みを使った記録から出しています（記録は 0.11.1 から）。</p>
+  <ul class="items" id="mechList"></ul>
 </section>
 
-<section id="topics">
-  <div class="card">
-    <div class="k">横が快（嫌い −1 〜 +1 好き）、縦が覚醒（心が動かない 0 〜 1 心が動く）。点はドラッグで動かせます。保存するまで反映されません。白抜きの点はナギが会話で口にして覚えた話題です。点は経験でも動きます（人が置いた点は置いた場所から±0.2まで。手で動かすと、そこが新しい置き場所になる）。</div>
-    <svg id="plot" viewBox="0 0 640 400" style="width:100%;height:auto;touch-action:none"></svg>
-  </div>
-  <div class="card">
-    <table><thead><tr><th>話題</th><th>快</th><th>覚醒</th><th>メモ</th><th></th></tr></thead><tbody id="tbody"></tbody></table>
-    <div class="row" style="margin-top:10px">
-      <button class="btn ghost" id="add">＋ 話題を足す</button>
-      <button class="btn" id="saveTopics">保存</button>
-      <span id="msg" class="mute"></span>
-    </div>
-    <div class="mute" style="font-size:13px;margin-top:8px">快（横）はこの話題が出た時の気分の動きと、話の長さに効きます。覚醒（縦）は、話しかけられていない時に会話へ混ざるかに効きます（0.11.0〜）。</div>
+<!-- 好き嫌い -->
+<section class="view" id="v-topics">
+  <p class="lead">横が好き嫌い（左が嫌い、右が好き）、縦が乗りやすさ（上ほど心が動く）。点をドラッグして動かし、保存すると反映されます。白抜きの点はナギが会話で覚えた話題。点は経験でも少し動きます（人が置いた点は置いた場所から±0.2まで）。</p>
+  <svg class="plot" id="plot" role="img" aria-label="話題の好き嫌いの図"></svg>
+  <ul class="edit" id="topicEdit"></ul>
+  <div class="btns">
+    <button class="btn ghost" id="add" type="button">話題を足す</button>
+    <button class="btn" id="saveTopics" type="button">保存する</button>
+    <span id="msg" class="mute" role="status"></span>
   </div>
 </section>
+<section class="view" id="v-lessons">
+  <p class="lead">ナギが教わったこと。会話で教わった分と、評価コメントでの事実の訂正。間違って覚えたものは × で消せます（すぐ反映）。</p>
+  <ul class="items" id="lessonList"></ul>
+</section>
 
-<section id="likes"><div class="card"><div class="k">好感度（−100〜+100、最初は+20）。名前を押すと出来事が出ます。話しかけられた時の気分の動きには使っています（0.9.8〜）が、態度・口調にはまだ効いていません。</div><div id="likeList"></div></div></section>
-<section id="names"><div class="card"><div class="k">集まった呼び名（2人以上から合わせて3回で採用）</div><table id="nameTable"></table></div></section>
-<section id="lessons"><div class="card"><div class="k">ナギが教わったこと。会話で教わった分と、評価コメントの事実の訂正。間違って覚えたものは×で消せます（すぐ反映）。</div><table id="lessonTable"></table></div></section>
-<section id="ratings"><div class="card"><pre id="rsum"></pre></div><div class="card"><table id="rtable"></table></div></section>
-<section id="log"><div class="card"><div class="row" style="margin-bottom:8px"><button class="btn ghost" id="reloadLog">再読み込み</button>
-  <input id="logFilter" placeholder="絞り込み（例: 判断 / 好感度 / 拾う）" style="max-width:320px"></div><pre id="logBox"></pre></div></section>
-<section id="mechs"><div class="card"><div class="k">ナギの感情の仕組みが、今どこまで入っているか。<b>状態は、Botが実際にその仕組みを効かせた記録から出しています</b>（手書きではない。記録は0.11.1から）。<b class="pos">使用中</b>＝会話や行動に効いている／<b style="color:var(--warn)">数えるだけ</b>＝記録しているが、まだ効かせていない／<span class="mute">未実装</span>＝設計だけ</div><table id="mechTable"></table></div></section>
-<section id="info">
-  <div class="card"><div class="k">動いているもの</div><table id="svc"></table></div>
+<!-- 人 -->
+<section class="view" id="v-likes">
+  <p class="lead">好感度（−100〜+100、最初は+20）。名前を押すと、動いた出来事が出ます。今は気分の動きにだけ効いていて、口調にはまだ効いていません。</p>
+  <div id="likeList"></div>
+</section>
+<section class="view" id="v-anger">
+  <p class="lead">ナギが今怒っている相手。本気でけなされると大きく、見下されると小さく怒り、2時間で半分に冷めます（仲のいい相手は1時間）。謝られると減ります。</p>
+  <ul class="rows" id="angerList"></ul>
+</section>
+<section class="view" id="v-names">
+  <p class="lead">誰がどう呼ばれているか。2人以上から合わせて3回で採用します（まだ会話には使っていません）。</p>
+  <ul class="rows" id="nameList"></ul>
+</section>
+
+<!-- 記録 -->
+<section class="view" id="v-ratings">
+  <div class="summary" id="rsum"></div>
+  <ul class="items" id="rlist"></ul>
+</section>
+<section class="view" id="v-log">
+  <div class="btns" style="margin:0 0 10px">
+    <input class="search" id="logFilter" placeholder="絞り込む（例: 判断、好感度、怒り）" aria-label="ログを絞り込む">
+    <button class="btn ghost" id="reloadLog" type="button">読み直す</button>
+  </div>
+  <pre class="log" id="logBox"></pre>
+</section>
+<section class="view" id="v-info">
+  <h2>動いているもの</h2><ul class="rows" id="svc"></ul>
   <div id="linkCards"></div>
-  <div class="card"><div class="k">覚え書き</div><table id="facts"></table></div>
+  <h2>覚え書き</h2><ul class="rows" id="infoFacts"></ul>
 </section>
 </main>
+
+<nav class="dock" id="dock" aria-label="グループ"></nav>
 
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const sign = v => (v > 0 ? "+" : "") + v;
-let topics = [], logLines = [];
+const hm = at => esc(String(at).slice(11, 16));
+const md16 = at => esc(String(at).slice(5, 16).replace("T", " "));
+const none = t => `<li class="empty">${t}</li>`;
 
-document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
-  document.querySelectorAll("#tabs button, section").forEach(x => x.classList.remove("on"));
-  b.classList.add("on"); $("#" + b.dataset.t).classList.add("on");
-  if (b.dataset.t === "ratings") loadRatings();
-  if (b.dataset.t === "log") loadLog();
-  if (b.dataset.t === "info") loadInfo();
-  if (b.dataset.t === "mechs") loadMechs();
-  if (b.dataset.t === "lessons") loadLessons();
+// --- グループと小タブ。9つあったタブを4つにまとめた（スマホで5つが画面の外に出ていた） ---
+const ICON = {
+  now: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
+  taste: '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>',
+  people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.2"/><path d="M3.5 19c.8-3 3-4.6 5.5-4.6s4.7 1.6 5.5 4.6"/><circle cx="17" cy="8" r="2.4"/><path d="M16 13.6c2.2.2 3.8 1.6 4.5 4"/></svg>',
+  log: '<svg viewBox="0 0 24 24"><path d="M7 4h10v16H7z"/><path d="M10 8h4M10 12h4M10 16h2"/></svg>',
+};
+const GROUPS = [
+  {id: "now", name: "いま", views: [["state", "様子"], ["mechs", "仕組み"]]},
+  {id: "taste", name: "好き嫌い", views: [["topics", "話題"], ["lessons", "教わったこと"]]},
+  {id: "people", name: "人", views: [["likes", "好感度"], ["anger", "怒り"], ["names", "呼び名"]]},
+  {id: "log", name: "記録", views: [["ratings", "評価"], ["log", "ログ"], ["info", "情報"]]},
+];
+const LOAD = {mechs: loadMechs, lessons: loadLessons, ratings: loadRatings, log: loadLog, info: loadInfo};
+let cur = {group: "now", view: "state"};
+const lastView = {};
+function render() {
+  const g = GROUPS.find(x => x.id === cur.group);
+  const grpBtn = x => `<button class="grp" type="button" data-g="${x.id}" aria-selected="${x.id === cur.group}">${ICON[x.id]}<span>${x.name}</span></button>`;
+  $("#dock").innerHTML = GROUPS.map(grpBtn).join("");
+  $("#groupsTop").innerHTML = GROUPS.map(grpBtn).join("");
+  $("#subs").innerHTML = g.views.length > 1 ? g.views.map(([id, name]) =>
+    `<button class="sub" type="button" role="tab" data-v="${id}" aria-selected="${id === cur.view}">${name}</button>`).join("") : "";
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + cur.view));
+  if (LOAD[cur.view]) LOAD[cur.view]();
+  if (cur.view === "topics") redraw();
+  if (cur.view === "state") drawMood(lastMood);
+  try { localStorage.setItem("nagi-ui", JSON.stringify(cur)); } catch {}
+}
+document.addEventListener("click", e => {
+  const gb = e.target.closest(".grp"), vb = e.target.closest(".sub");
+  if (gb) { lastView[cur.group] = cur.view; const g = GROUPS.find(x => x.id === gb.dataset.g); cur = {group: g.id, view: lastView[g.id] || g.views[0][0]}; render(); scrollTo(0, 0); }
+  if (vb) { cur.view = vb.dataset.v; render(); }
 });
 
+// --- いま ---
+let lastMood = null;
+const DOING = {"寝ている": "寝てる", "起きたて": "起きたて", "講義中": "講義中", "バイト中": "バイト中", "離席中": "席を外してる", "深夜": "夜ふかし中", "ふつう": "起きてる"};
+function sentence(s) {
+  const doing = DOING[s.state] || s.activity;
+  const mood = s.mood ? s.mood.words.replace(/（.*）$/, "") : "まだ分からない";
+  const feel = s.body && s.body.feelings && !s.body.feelings.startsWith("特に無し") ? s.body.feelings : "";
+  return `${doing}。機嫌は${mood}${feel ? "、" + feel : ""}。`;
+}
 async function loadState() {
   const s = await (await fetch("api/state")).json();
-  $("#now").textContent = s.now.replace("T", " ");
-  $("#act").textContent = s.activity;
-  $("#run").textContent = (s.stopped ? "停止中" : "稼働中") + `・${s.device}・今日 ${s.counts.total}/${s.counts.max} 回・自分から ${s.starts}/2・後で返す ${s.deferred} 件`;
+  $("#clock").textContent = s.now.slice(5, 16).replace("T", " ") + " 時点";
+  $("#say").textContent = s.stopped ? "止めている（返事も話しかけもしない）。" : sentence(s);
+  const why = s.mood && /（(.*)）$/.exec(s.mood.words);
+  $("#why").textContent = s.mood ? `気分 ${sign(s.mood.v)}（体から来る基準 ${sign(s.mood.base)}）${why ? "。理由: " + why[1] : ""}` : "";
+  $("#facts").textContent = `今日は ${s.counts.total} 回返事した（1日 ${s.counts.max} 回まで）。自分から話しかけたのは ${s.starts} 回（1日2回まで）。` +
+    (s.deferred ? `後で返す約束が ${s.deferred} 件ある。` : "") + `ナギは今${s.device === "PC" ? "PCの前にいる" : "スマホを見ている"}。`;
   const b = s.body;
-  $("#feel").textContent = b ? (b.feelings ? "体の感じ: " + b.feelings : "体の感じ: とくに無し") : "";
-  const meter = (k, v, max = 100) => `<div><div class="k">${k}</div><div class="v">${v}</div><div class="bar"><i style="width:${Math.max(0, Math.min(100, v / max * 100))}%"></i></div></div>`;
-  $("#bodyGrid").innerHTML = b ? meter("眠気（感じている）", b.felt_sleepy) + meter("空腹", b.hunger) + meter("気力", b.energy)
-    + `<div><div class="k">残高</div><div class="v">${b.money.toLocaleString()}円</div></div>` : "体の記録なし";
-  const md = s.mood;
-  $("#moodWords").textContent = md ? `気分: ${md.words}（${sign(md.v)}／体で決まる基準 ${sign(md.base)}）` : "気分: まだ記録なし";
-  drawMood(md);
-  $("#moodEvents").innerHTML = md && md.events.length ? md.events.map(e => `<tr><td class="mute">${esc(e.at.slice(11, 16))}</td><td>${esc(e.why)}</td><td class="${e.delta > 0 ? "pos" : "neg"}">${sign(e.delta)}</td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
-  $("#events").innerHTML = s.events.length ? s.events.map(e => `<tr><td class="mute">${esc(e.at.slice(11, 16))}</td><td>${esc(e.what)}</td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
-  $("#likeList").innerHTML = s.likes.length ? s.likes.map(p => `<details class="card" style="margin:8px 0">
-      <summary><b>${esc(p.display)}</b> <span class="${p.v >= 15 ? "pos" : p.v <= -15 ? "neg" : ""}">${sign(p.v)}</span> <span class="mute">${esc(p.band)}</span></summary>
-      ${p.events.length ? "<table>" + p.events.map(e => `<tr><td class="mute">${esc(e.when)}</td><td>${esc(e.what)}</td><td class="${e.delta > 0 ? "pos" : "neg"}">${sign(e.delta)}</td><td>${esc(e.quote)}</td></tr>`).join("") + "</table>" : "<div class='mute'>出来事なし（話しかけの+1だけ）</div>"}
-    </details>`).join("") : "<div class='mute'>まだ無し</div>";
+  const meter = (k, v) => `<div class="m"><div class="k">${k}</div><div class="v">${v}</div><div class="bar"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></div></div>`;
+  $("#body4").innerHTML = b ? meter("眠気", b.felt_sleepy) + meter("空腹", b.hunger) + meter("気力", b.energy) +
+    `<div class="m"><div class="k">残高</div><div class="v">${b.money.toLocaleString()}<small style="font-size:13px;font-weight:600">円</small></div></div>` : "";
+  lastMood = s.mood;
+  drawMood(lastMood);
+  $("#moodEvents").innerHTML = s.mood && s.mood.events.length ? s.mood.events.map(e =>
+    `<li><span class="t">${hm(e.at)}</span><span>${esc(e.why)}</span><span class="d ${e.delta > 0 ? "pos" : "neg"}">${sign(e.delta)}</span></li>`).join("") : none("まだ無い");
+  $("#events").innerHTML = s.events.length ? s.events.map(e => `<li><span class="t">${hm(e.at)}</span><span>${esc(e.what)}</span><span></span></li>`).join("") : none("まだ無い");
+  $("#likeList").innerHTML = s.likes.length ? s.likes.map(p => `<details class="person"><summary>
+      <span><b>${esc(p.display)}</b></span><span class="mute">${esc(p.band)}</span>
+      <span class="score ${p.v >= 15 ? "pos" : p.v <= -15 ? "neg" : ""}">${sign(p.v)}</span></summary>
+      <ul class="rows">${p.events.length ? p.events.map(e => `<li><span class="t">${esc(e.when)}</span><span>${esc(e.what)}${e.quote ? `<div class="mute">「${esc(e.quote)}」</div>` : ""}</span><span class="d ${e.delta > 0 ? "pos" : "neg"}">${sign(e.delta)}</span></li>`).join("") : none("動いた出来事は無い（話しかけの+1だけ）")}</ul>
+    </details>`).join("") : `<p class="mute">まだ無い</p>`;
+  $("#angerList").innerHTML = s.anger.length ? s.anger.map(a => `<li><span class="t">${esc(a.band)}</span>
+      <span><b>${esc(a.display)}</b><div class="mute">「${esc(a.why)}」と言われた</div></span><span class="d neg">${a.v}</span></li>`).join("") : none("今は誰にも怒っていない");
   const n = Object.values(s.names);
-  $("#nameTable").innerHTML = n.length ? "<tr><th>呼ばれた人</th><th>呼び名（回数／人数）</th></tr>" + n.map(p => `<tr><td>${esc(p.display)}</td><td>${Object.entries(p.forms).sort((a, b) => b[1].n - a[1].n).map(([k, v]) => `${esc(k)} <span class="mute">${v.n}/${v.by.length}</span>`).join("、")}</td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
+  $("#nameList").innerHTML = n.length ? n.map(p => `<li><span class="t"></span><span><b>${esc(p.display)}</b><div>${Object.entries(p.forms).sort((a, b) => b[1].n - a[1].n)
+    .map(([k, v]) => `${esc(k)} <span class="mute">${v.n}回・${v.by.length}人</span>`).join("、")}</div></span><span></span></li>`).join("") : none("まだ無い");
 }
 
-async function loadRatings() {
-  const r = await (await fetch("api/ratings")).json();
-  $("#rsum").textContent = r.summary;
-  $("#rtable").innerHTML = "<tr><th>時刻</th><th>版</th><th>評価</th><th>発言</th><th>コメント</th><th>その時の状態</th></tr>" + r.items.map(x => `<tr><td class="mute">${esc(x.at.slice(5, 16).replace("T", " "))}</td><td class="mute" style="white-space:nowrap">${esc((x.version || "?").replace("minato ", ""))}</td><td>${esc(x.label)}${x.detail ? `<div class="mute">${esc(x.detail)}</div>` : ""}</td><td>${esc(x.author)}: ${esc(x.text)}</td><td>${esc(x.comment)}</td><td class="mute">${esc(x.state_text)}</td></tr>`).join("");
-}
-
-async function loadLog() {
-  logLines = (await (await fetch("api/log?n=400")).json()).lines;
-  showLog();
-}
-function showLog() {
-  const f = $("#logFilter").value.trim();
-  const lines = logLines.filter(l => !l.includes("RESUMED") && (!f || l.includes(f)))
-    .map(l => l.replace(/^\S+ \S+ python\[\d+\]: \S+ /, ""));
-  $("#logBox").textContent = lines.reverse().join("\n");
-}
+// 快・不快のグラフ。幅に合わせて描き、文字はいつも12px（スマホで5.4pxになっていた）
 function drawMood(md) {
-  const W = 640, H = 180, L = 34, R = 8, T = 10, B = 22, now = Date.now(), span = 24 * 3600e3;
+  const svg = $("#moodPlot"); const W = Math.max(280, svg.clientWidth || 600), H = Math.round(Math.min(190, Math.max(130, W * .3)));
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("height", H);
+  const L = 30, R = 6, T = 8, B = 20, now = Date.now(), span = 24 * 3600e3, ink = "var(--night-mute)";
   const pts = (md ? md.hist : []).map(([at, v]) => [new Date(at).getTime(), v]).filter(([t]) => now - t <= span);
-  // 縦の範囲は動いた幅に合わせる（0を中心に上下対称。最低±20で「ふつう」の帯±14が収まる。10刻みで広げる）
   const top = Math.min(100, Math.max(20, Math.ceil(Math.max(0, ...pts.map(([, v]) => Math.abs(v))) * 1.15 / 10) * 10));
   const sx = t => L + (W - L - R) * (1 - (now - t) / span), sy = v => T + (H - T - B) * (1 - (v + top) / (2 * top));
-  let s = `<rect x="${L}" y="${sy(14)}" width="${W - L - R}" height="${sy(-14) - sy(14)}" fill="currentColor" opacity=".04"/>`
-    + [top, top / 2, 0, -top / 2, -top].map(v => `<line x1="${L}" x2="${W - R}" y1="${sy(v)}" y2="${sy(v)}" stroke="currentColor" opacity="${v ? .08 : .3}"/>
-    <text x="${L - 4}" y="${sy(v) + 4}" text-anchor="end" font-size="11" fill="var(--mute)">${v > 0 ? "+" + v : v}</text>`).join("");
-  for (let h = 0; h <= 24; h += 6) s += `<text x="${sx(now - h * 3600e3)}" y="${H - 4}" text-anchor="middle" font-size="11" fill="var(--mute)">${h ? h + "時間前" : "今"}</text>`;
+  let s = `<rect x="${L}" y="${sy(14)}" width="${W - L - R}" height="${sy(-14) - sy(14)}" fill="#fff" opacity=".07"/>`;
+  for (const v of [top, 0, -top]) s += `<line x1="${L}" x2="${W - R}" y1="${sy(v)}" y2="${sy(v)}" stroke="#fff" opacity="${v ? .1 : .3}"/>
+    <text x="${L - 5}" y="${sy(v) + 4}" text-anchor="end" font-size="12" fill="${ink}">${v > 0 ? "+" + v : v}</text>`;
+  for (const h of (W < 420 ? [24, 12, 0] : [24, 18, 12, 6, 0])) s += `<text x="${sx(now - h * 3600e3)}" y="${H - 4}" text-anchor="${h === 24 ? "start" : h ? "middle" : "end"}" font-size="12" fill="${ink}">${h ? h + "時間前" : "今"}</text>`;
   if (pts.length > 1) {
     const line = pts.map(([t, v]) => `${sx(t).toFixed(1)},${sy(v).toFixed(1)}`).join(" ");
-    s += `<polygon points="${sx(pts[0][0])},${sy(0)} ${line} ${sx(pts[pts.length - 1][0])},${sy(0)}" fill="var(--acc)" opacity=".12"/>
-      <polyline points="${line}" fill="none" stroke="var(--acc)" stroke-width="2"/>`;
-  }
+    s += `<polygon points="${sx(pts[0][0])},${sy(0)} ${line} ${sx(pts[pts.length - 1][0])},${sy(0)}" fill="#fff" opacity=".1"/>
+      <polyline points="${line}" fill="none" stroke="var(--night-ink)" stroke-width="2" stroke-linejoin="round"/>`;
+  } else s += `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" font-size="13" fill="${ink}">記録が溜まるまで待つ（10分ごとに1点）</text>`;
   for (const e of md ? md.events : []) {
     const t = new Date(e.at).getTime();
-    if (now - t <= span) s += `<circle cx="${sx(t)}" cy="${sy(0)}" r="4" fill="${e.delta > 0 ? "var(--pos)" : "var(--neg)"}"><title>${esc(e.at.slice(11, 16) + " " + e.why + " " + sign(e.delta))}</title></circle>`;
+    if (now - t <= span) s += `<circle cx="${sx(t)}" cy="${sy(0)}" r="4.5" fill="${e.delta > 0 ? "var(--pos-night)" : "var(--neg-night)"}"><title>${hm(e.at)} ${esc(e.why)} ${sign(e.delta)}</title></circle>`;
   }
-  if (pts.length < 2) s += `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" fill="var(--mute)">記録が溜まるまで待ってね（10分ごとに1点）</text>`;
-  $("#moodPlot").innerHTML = s;
+  svg.innerHTML = s;
 }
-function drawLessons(items) {
-  $("#lessonTable").innerHTML = items.length ? "<tr><th>覚え書き</th><th>思い出す言葉</th><th>誰から</th><th>いつ</th><th></th></tr>" +
-    items.slice().reverse().map(x => `<tr><td>${esc(x.fact)}${x.n > 1 ? ` <span class="mute">×${x.n}</span>` : ""}</td>
-      <td class="mute">${esc((x.keywords || []).join("、"))}</td><td>${esc(x.by)}</td><td class="mute">${esc(x.at.slice(5, 16).replace("T", " "))}</td>
-      <td><button class="btn ghost" data-lesson="${x.id}" title="消す">×</button></td></tr>`).join("") : "<tr><td class='mute'>まだ無し</td></tr>";
-}
-async function loadLessons() { drawLessons((await (await fetch("api/lessons")).json()).items); }
-$("#lessonTable").onclick = async e => {
-  const id = e.target.dataset.lesson;
-  if (!id || !confirm("この覚え書きを消す？")) return;
-  drawLessons((await (await fetch("api/lessons/" + id, {method: "DELETE"})).json()).items);
-};
-const MECH_LABEL = {on: ["使用中", "var(--pos)"], count: ["数えるだけ", "var(--warn)"], idle: ["しばらく動いていない", "var(--warn)"],
-  never: ["まだ動いていない", "var(--mute)"], todo: ["未実装", "var(--mute)"]};
+addEventListener("resize", () => { if (cur.view === "state") drawMood(lastMood); if (cur.view === "topics") drawPlot(); });
+
+// --- 仕組み ---
+const MECH = {on: ["使っている", "pos"], count: ["数えるだけ", "warn"], idle: ["しばらく動いていない", "warn"], never: ["まだ動いていない", "mute"], todo: ["まだ作っていない", "mute"]};
 async function loadMechs() {
   const d = await (await fetch("api/mechs")).json();
   const bold = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-  $("#mechTable").innerHTML = "<tr><th>仕組み</th><th>状態</th><th>何に効くか</th><th>今の値</th></tr>" + d.items.map(x => {
-    const [lab, col] = MECH_LABEL[x.status];
-    return `<tr><td><b>${esc(x.name)}</b>${x.since ? `<div class="mute">初めて動いた ${esc(x.since.replace("minato ", ""))}</div>` : ""}</td>
-      <td style="color:${col};white-space:nowrap;font-weight:600">${lab}${x.last ? `<div class="mute" style="font-weight:400">最後 ${esc(x.last.slice(5, 16).replace("T", " "))}・${x.n}回</div>` : ""}</td><td>${bold(x.does)}</td>
-      <td class="mute">${x.now ? esc(x.now) : "—"}</td></tr>`;
-  }).join("");
+  $("#mechList").innerHTML = d.items.map(x => { const [lab, cls] = MECH[x.status]; return `<li>
+    <div class="head"><span class="chip ${cls}">${lab}</span><b style="color:var(--ink);font-size:15px">${esc(x.name)}</b>
+      ${x.last ? `<span>最後 ${md16(x.last)}・${x.n}回</span>` : ""}${x.since ? `<span>初めて ${esc(x.since.replace("minato ", ""))}</span>` : ""}</div>
+    <p class="body">${bold(x.does)}</p>${x.now ? `<p class="note">今: ${esc(x.now)}</p>` : ""}</li>`; }).join("");
 }
-async function loadInfo() {
-  const d = await (await fetch("api/info")).json();
-  $("#svc").innerHTML = `<tr><td>版</td><td>${esc(d.version || "?")}</td></tr>` + d.services.map(s =>
-    `<tr><td>${esc(s.name)}</td><td class="${s.state === "active" ? "pos" : "neg"}">${esc(s.state)}</td><td class="mute">${esc(s.since)}から</td></tr>`).join("");
-  $("#linkCards").innerHTML = d.sections.map(sec => `<div class="card"><div class="k">${esc(sec.title)}</div>
-    ${sec.items.map(i => `<div><a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.name)}</a></div>`).join("")}</div>`).join("");
-  $("#facts").innerHTML = d.facts.map(([k, v]) => `<tr><td class="mute" style="white-space:nowrap">${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+
+// --- 教わったこと ---
+function drawLessons(items) {
+  $("#lessonList").innerHTML = items.length ? items.slice().reverse().map(x => `<li>
+    <button class="x act" type="button" data-lesson="${x.id}" aria-label="「${esc(x.fact)}」を消す">×</button>
+    <p class="body" style="margin:0"><b>${esc(x.fact)}</b>${x.n > 1 ? ` <span class="mute">（${x.n}回教わった）</span>` : ""}</p>
+    <p class="note">${esc(x.by)}から・${md16(x.at)}・思い出す言葉: ${esc((x.keywords || []).join("、"))}</p></li>`).join("") : none("まだ無い。会話で教えたり、評価のコメントで正したりすると増えます");
+}
+async function loadLessons() { drawLessons((await (await fetch("api/lessons")).json()).items); }
+$("#lessonList").onclick = async e => {
+  const b = e.target.closest("[data-lesson]");
+  if (!b || !confirm("この覚え書きを消す？")) return;
+  drawLessons((await (await fetch("api/lessons/" + b.dataset.lesson, {method: "DELETE"})).json()).items);
+};
+
+// --- 評価 ---
+const LABEL_CLS = {"自然": "pos", "流れとズレてる": "warn", "キャラじゃない": "warn", "感情がズレてる": "warn", "バグ": "neg"};
+async function loadRatings() {
+  const r = await (await fetch("api/ratings")).json();
+  const cnt = {}; r.items.filter(x => x.is_me !== false).forEach(x => cnt[x.label] = (cnt[x.label] || 0) + 1);
+  $("#rsum").innerHTML = Object.entries(cnt).map(([k, v]) => `<div><b>${v}</b>${esc(k)}</div>`).join("") || `<div>まだ評価が無い</div>`;
+  $("#rlist").innerHTML = r.items.map(x => `<li>
+    <div class="head"><span class="chip ${LABEL_CLS[x.label] || ""}">${esc(x.label)}${x.detail ? "・" + esc(x.detail) : ""}</span><span>${md16(x.at)}</span><span>${esc((x.version || "?").replace("minato ", ""))}</span></div>
+    <p class="body">${esc(x.author)}「${esc(x.text)}」</p>
+    ${x.comment ? `<p class="body" style="margin-top:2px">→ ${esc(x.comment)}</p>` : ""}
+    ${x.state_text ? `<p class="note">その時: ${esc(x.state_text)}</p>` : ""}</li>`).join("") || none("まだ無い");
+}
+
+// --- ログ ---
+let logLines = [];
+async function loadLog() { logLines = (await (await fetch("api/log?n=400")).json()).lines; showLog(); }
+function showLog() {
+  const f = $("#logFilter").value.trim();
+  $("#logBox").textContent = logLines.filter(l => !l.includes("RESUMED") && (!f || l.includes(f)))
+    .map(l => l.replace(/^\S+ \S+ python\[\d+\]: \S+ /, "")).reverse().join("\n") || "当てはまる行が無い";
 }
 $("#reloadLog").onclick = loadLog; $("#logFilter").oninput = showLog;
 
-// --- 話題の座標 ---
-const W = 640, H = 400, P = 36;
-const sx = v => P + (v + 1) / 2 * (W - 2 * P), sy = a => H - P - a * (H - 2 * P);
-const vx = x => Math.max(-1, Math.min(1, (x - P) / (W - 2 * P) * 2 - 1)), ay = y => Math.max(0, Math.min(1, (H - P - y) / (H - 2 * P)));
+// --- 情報 ---
+async function loadInfo() {
+  const d = await (await fetch("api/info")).json();
+  $("#svc").innerHTML = `<li><span class="t">版</span><span>${esc(d.version || "?")}</span><span></span></li>` + d.services.map(s =>
+    `<li><span class="t">${s.state === "active" ? "動作中" : "停止"}</span><span>${esc(s.name)}<div class="mute">${esc(s.since)}から</div></span><span class="d ${s.state === "active" ? "pos" : "neg"}">●</span></li>`).join("");
+  $("#linkCards").innerHTML = d.sections.map(sec => `<h2>${esc(sec.title)}</h2><p class="links">${sec.items.map(i =>
+    `<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.name)}</a>`).join("")}</p>`).join("");
+  $("#infoFacts").innerHTML = d.facts.map(([k, v]) => `<li><span class="t">${esc(k)}</span><span style="grid-column:2/-1">${esc(v)}</span></li>`).join("");
+}
+
+// --- 話題の図（幅に合わせて描く。文字はいつも12px） ---
+let topics = [], drag = null, PW = 640, PH = 400;
+const PP = 30;
+const sxp = v => PP + (v + 1) / 2 * (PW - 2 * PP), syp = a => PH - PP - a * (PH - 2 * PP);
+const vx = x => Math.max(-1, Math.min(1, (x - PP) / (PW - 2 * PP) * 2 - 1)), ay = y => Math.max(0, Math.min(1, (PH - PP - y) / (PH - 2 * PP)));
 function drawPlot() {
-  const q = (x, y, t) => `<text x="${x}" y="${y}" text-anchor="middle">${t}</text>`;
-  let s = `<rect x="${P}" y="${P}" width="${W - 2 * P}" height="${H - 2 * P}" fill="none" stroke="currentColor" opacity=".15"/>
-    <line x1="${sx(0)}" y1="${P}" x2="${sx(0)}" y2="${H - P}" stroke="currentColor" opacity=".2"/>
-    <line x1="${P}" y1="${sy(.5)}" x2="${W - P}" y2="${sy(.5)}" stroke="currentColor" opacity=".1" stroke-dasharray="4 4"/>
-    ${q(sx(-.5), P - 10, "嫌い・心が動く（とっさに反応）")}${q(sx(.5), P - 10, "好き・心が動く（食いつく）")}
-    ${q(sx(-.5), H - 10, "嫌い・静か（うんざり）")}${q(sx(.5), H - 10, "好き・静か（和む）")}
-    ${q(P, H - P + 14, "−1")}${q(sx(0), H - P + 14, "0")}${q(W - P, H - P + 14, "+1")}`;
-  const placed = [];   // 近い点のラベルは下にずらして重ねない
+  const svg = $("#plot"); PW = Math.max(300, svg.clientWidth || 640); PH = Math.round(Math.min(460, Math.max(300, PW * .7)));
+  svg.setAttribute("viewBox", `0 0 ${PW} ${PH}`); svg.setAttribute("height", PH);
+  const q = (x, y, t, a = "middle") => `<text x="${x}" y="${y}" text-anchor="${a}" font-size="12">${t}</text>`;
+  const narrow = PW < 480;
+  let s = `<line x1="${sxp(0)}" y1="${PP}" x2="${sxp(0)}" y2="${PH - PP}" stroke="currentColor" opacity=".18"/>
+    <line x1="${PP}" y1="${syp(.5)}" x2="${PW - PP}" y2="${syp(.5)}" stroke="currentColor" opacity=".12" stroke-dasharray="4 4"/>
+    ${q(PP, 18, narrow ? "嫌い・心が動く" : "嫌い・心が動く（とっさに反応）", "start")}${q(PW - PP, 18, narrow ? "好き・心が動く" : "好き・心が動く（食いつく）", "end")}
+    ${q(PP, PH - 8, narrow ? "嫌い・静か" : "嫌い・静か（うんざり）", "start")}${q(PW - PP, PH - 8, narrow ? "好き・静か" : "好き・静か（和む）", "end")}`;
+  const placed = [];
   topics.forEach((t, i) => {
     const c = t.valence > 0.15 ? "var(--pos)" : t.valence < -0.15 ? "var(--neg)" : "var(--warn)";
-    const x = sx(t.valence), y = sy(t.arousal);
+    const x = sxp(t.valence), y = syp(t.arousal), right = x > PW * .62;
     let dy = 4;
-    while (placed.some(([px, py]) => Math.abs(px - x) < 90 && Math.abs(py - (y + dy)) < 13)) dy += 14;
+    while (placed.some(([px, py]) => Math.abs(px - x) < 80 && Math.abs(py - (y + dy)) < 14)) dy += 14;
     placed.push([x, y + dy]);
-    s += `<g class="pt" data-i="${i}" transform="translate(${x},${y})">${t.source === "learned" ? `<circle r="6" fill="none" stroke="${c}" stroke-width="2.5"/>` : `<circle r="7" fill="${c}"/>`}<text x="10" y="${dy}">${esc(t.name)}</text></g>`;
+    s += `<g class="pt" data-i="${i}" transform="translate(${x},${y})">${t.source === "learned" ? `<circle r="6" fill="var(--surface)" stroke="${c}" stroke-width="2.5"/>` : `<circle r="7" fill="${c}"/>`}
+      <circle r="16" fill="transparent"/><text x="${right ? -11 : 11}" y="${dy}" font-size="12" text-anchor="${right ? "end" : "start"}">${esc(t.name)}</text></g>`;
   });
-  $("#plot").innerHTML = s;
+  svg.innerHTML = s;
 }
-function drawTable() {
-  $("#tbody").innerHTML = topics.map((t, i) => `<tr>
-    <td><input data-i="${i}" data-k="name" value="${esc(t.name)}"></td>
-    <td><input type="number" step="0.05" min="-1" max="1" data-i="${i}" data-k="valence" value="${t.valence}"></td>
-    <td><input type="number" step="0.05" min="0" max="1" data-i="${i}" data-k="arousal" value="${t.arousal}"></td>
-    <td><input data-i="${i}" data-k="note" value="${esc(t.note)}" title="${t.source === "learned" ? "ナギが会話で覚えた（" + esc(t.at || "") + "）" : "人が置いた"}"></td>
-    <td><button class="btn ghost" data-del="${i}" title="消す">×</button></td></tr>`).join("");
+function drawEdit() {
+  $("#topicEdit").innerHTML = `<li class="hd"><span>話題</span><span>好き嫌い</span><span>乗りやすさ</span><span></span></li>` + topics.map((t, i) => `<li>
+    <input data-i="${i}" data-k="name" value="${esc(t.name)}" aria-label="話題の名前">
+    <input type="number" step="0.05" min="-1" max="1" data-i="${i}" data-k="valence" value="${t.valence}" aria-label="${esc(t.name)}の好き嫌い（-1〜1）">
+    <input type="number" step="0.05" min="0" max="1" data-i="${i}" data-k="arousal" value="${t.arousal}" aria-label="${esc(t.name)}の乗りやすさ（0〜1）">
+    <button class="x" type="button" data-del="${i}" aria-label="${esc(t.name)}を消す">×</button>
+    <input class="memo" data-i="${i}" data-k="note" value="${esc(t.note)}" placeholder="メモ" aria-label="${esc(t.name)}のメモ" title="${t.source === "learned" ? "ナギが会話で覚えた（" + esc(t.at || "") + "）" : "人が置いた"}"></li>`).join("");
 }
-function redraw() { drawPlot(); drawTable(); }
-$("#tbody").oninput = e => {
+function redraw() { drawPlot(); drawEdit(); }
+$("#topicEdit").oninput = e => {
   const el = e.target, i = +el.dataset.i, k = el.dataset.k;
   if (k === undefined) return;
   topics[i][k] = (k === "valence" || k === "arousal") ? +el.value : el.value;
   if ((k === "valence" || k === "arousal") && topics[i].source !== "learned") topics[i].anchor = {valence: topics[i].valence, arousal: topics[i].arousal};
-  drawPlot(); $("#msg").textContent = "未保存";
+  drawPlot(); $("#msg").textContent = "保存していない変更がある";
 };
-$("#tbody").onclick = e => {
-  if (e.target.dataset.del === undefined) return;
-  topics.splice(+e.target.dataset.del, 1); redraw(); $("#msg").textContent = "未保存";
+$("#topicEdit").onclick = e => {
+  const b = e.target.closest("[data-del]");
+  if (!b) return;
+  topics.splice(+b.dataset.del, 1); redraw(); $("#msg").textContent = "保存していない変更がある";
 };
-$("#add").onclick = () => { topics.push({name: "新しい話題", valence: 0, arousal: 0.5, note: ""}); redraw(); $("#msg").textContent = "未保存"; };
-let drag = null;
-const svgPt = e => { const r = $("#plot").getBoundingClientRect(); return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H]; };
+$("#add").onclick = () => { topics.push({name: "新しい話題", valence: 0, arousal: 0.5, note: ""}); redraw(); $("#msg").textContent = "保存していない変更がある"; };
+const svgPt = e => { const r = $("#plot").getBoundingClientRect(); return [(e.clientX - r.left) / r.width * PW, (e.clientY - r.top) / r.height * PH]; };
 $("#plot").addEventListener("pointerdown", e => { const g = e.target.closest(".pt"); if (g) { drag = +g.dataset.i; $("#plot").setPointerCapture(e.pointerId); } });
 $("#plot").addEventListener("pointermove", e => {
   if (drag === null) return;
@@ -252,16 +423,17 @@ $("#plot").addEventListener("pointermove", e => {
   if (topics[drag].source !== "learned") topics[drag].anchor = {valence: topics[drag].valence, arousal: topics[drag].arousal};
   drawPlot();
 });
-$("#plot").addEventListener("pointerup", () => { if (drag !== null) { drag = null; drawTable(); $("#msg").textContent = "未保存"; } });
+$("#plot").addEventListener("pointerup", () => { if (drag !== null) { drag = null; drawEdit(); $("#msg").textContent = "保存していない変更がある"; } });
 $("#saveTopics").onclick = async () => {
   const r = await fetch("api/topics", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({topics})});
   const j = await r.json();
-  if (!r.ok) { $("#msg").textContent = "保存できない: " + j.error; return; }
+  if (!r.ok) { $("#msg").textContent = "保存できなかった: " + j.error; return; }
   topics = j.topics; redraw(); $("#msg").textContent = "保存した（" + j.updated.slice(11, 16) + "）";
 };
-async function loadTopics() { topics = (await (await fetch("api/topics")).json()).topics; redraw(); }
+async function loadTopics() { topics = (await (await fetch("api/topics")).json()).topics; if (cur.view === "topics") redraw(); }
 
-loadState(); loadTopics(); setInterval(loadState, 30000);
+try { const saved = JSON.parse(localStorage.getItem("nagi-ui") || "null"); if (saved && GROUPS.some(g => g.id === saved.group && g.views.some(v => v[0] === saved.view))) cur = saved; } catch {}
+render(); loadState(); loadTopics(); setInterval(loadState, 30000);
 </script>
 </body>
 </html>
