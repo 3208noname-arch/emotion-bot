@@ -11,6 +11,12 @@ ADOPT_TIMES = 3
 ADOPT_CALLERS = 2
 MAX_LEN = 12
 HONORIFIC = re.compile(r"(さん|くん|君|氏|様)$")   # 「ちゃん」はあだ名の一部（あっちゃん）なので外さない
+# 名前の前後に付くあだ名の一部。「ちゃんなぎ」の「なぎ」だけを取っていた（11-03 ユーザー）
+AFFIX_BEFORE = re.compile(r"(ちゃん|ちゃーん|たん)$")
+AFFIX_AFTER = re.compile(r"^(ちゃん|ちゃーん|たん|っち|ぴ|りん|やん|さん|くん|君|様)")
+# 呼び名ではない呼びかけ（「あなた」「おめえ」が呼び名として数えられていた）
+PRONOUNS = {"あなた", "あんた", "おまえ", "お前", "おめえ", "おめー", "てめえ", "てめー", "手前", "きみ", "君", "こいつ", "そいつ", "あいつ",
+            "お前ら", "おまえら", "貴様", "きさま"}
 
 
 def clean(form):
@@ -20,7 +26,14 @@ def clean(form):
 
 
 def valid(form, text):
-    return bool(form) and len(form) <= MAX_LEN and not form.startswith("@") and form in text
+    return bool(form) and len(form) <= MAX_LEN and not form.startswith("@") and form in text and form not in PRONOUNS
+
+
+def around(text, start, end):
+    """正規表現で見つけた名前に、前後のあだ名の一部（ちゃん・たん・っち…）を含めて返す。"""
+    b = AFFIX_BEFORE.search(text[:start])
+    a = AFFIX_AFTER.match(text[end:])
+    return text[b.start() if b else start:end + (a.end() if a else 0)]
 
 
 def record(store, target_id, display, form, caller_id, t):

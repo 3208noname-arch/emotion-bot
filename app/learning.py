@@ -66,23 +66,30 @@ class LearningMixin:
             target = (ref.author if isinstance(ref, discord.Message) else
                       next((u for u in m.mentions if u != m.author), None))
             hit = persona.NAMES.search(m.content)
-            if hit and target in (None, self.user):
-                form = names.clean(hit.group())          # ナギの名前は正規表現で確実に取れる
-                target = self.user
-            elif target is None or target == m.author or (target.bot and target != self.user):
+            if hit:
+                # ナギの名前は正規表現で確実に取れる。前後の「ちゃん」なども含める。返信先が別の人でもナギの呼び名
+                # （鴉羽への返信の中の「ちゃんなぎ」を、鴉羽の呼び名として数えていた。11-03）
+                form = names.clean(names.around(m.content, hit.start(), hit.end()))
+                if names.valid(form, m.content):
+                    self.count_name(self.user, form, m)
+                if target in (None, self.user):
+                    return
+            if target is None or target == m.author or (target.bot and target != self.user):
                 return
-            else:
-                display = getattr(target, "display_name", target.name)
-                form = await pick_name(m.clean_content, display)
-            if not form:
-                return
-            display = self.ch.guild.me.display_name if target == self.user else target.display_name
-            names.record(self.s.setdefault("names", {}), target.id, display, form, m.author.id, now())
-            self.used("names")
-            save_state(self.s)
-            log.info("呼び名: %s → %s「%s」", m.author.display_name, display, form)
+            display = getattr(target, "display_name", target.name)
+            form = await pick_name(m.clean_content, display)
+            if not form or persona.NAMES.search(form):
+                return          # ナギの名前を含むものは、ほかの人の呼び名にしない
+            self.count_name(target, form, m)
         except Exception:
             log.exception("呼び名の読み取りに失敗")
+
+    def count_name(self, target, form, m):
+        display = self.ch.guild.me.display_name if target == self.user else target.display_name
+        names.record(self.s.setdefault("names", {}), target.id, display, form, m.author.id, now())
+        self.used("names")
+        save_state(self.s)
+        log.info("呼び名: %s → %s「%s」", m.author.display_name, display, form)
 
     def learn_like(self, m):
         """誰かに向けた発言を、好感度の判定待ちに積む（ナギ宛て・ナギが好きな相手宛ての両方）。
