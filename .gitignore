@@ -9,3 +9,4 @@ links.json
 __pycache__/
 .env
 topics.json
+changelog.json

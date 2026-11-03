@@ -2,7 +2,7 @@
 """ナギの様子を見て、話題の好き嫌い（座標）を編集する Web UI。Bot とは別のサービスで動かす。
 
 - state.json・ratings.jsonl は**読むだけ**（書くのは Bot。同時に書いて壊さないため）
-- 書くのは topics.json だけ（話題の快・覚醒の座標。Bot は快を気分に使う。覚醒はまだ使わない）
+- 書くのは topics.json・lessons.json（消すだけ）・changelog.json（お知らせの下書き）（話題の快・覚醒の座標。Bot は快を気分に使う。覚醒はまだ使わない）
 - 外から届かないネットワークのアドレスで待ち受ける（認証は無い）
 """
 import asyncio
@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 from aiohttp import web
 
+from deploy import changelog
 from engine import affinity, anger, body, decide, mechs as mech, mood, ratings, snapshot
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -247,6 +248,67 @@ async def lessons_delete(req):
     return web.json_response(obj)
 
 
+CHANGELOG = os.path.join(HERE, "changelog.json")   # お知らせの下書きと流した記録（GitHubに入れない）
+post_lock = asyncio.Lock()
+
+
+def find_note(obj, nid):
+    return next((x for x in obj["items"] if x.get("id") == nid), None)
+
+
+async def notes_get(_):
+    return web.json_response(load(CHANGELOG, {"items": []}))
+
+
+async def notes_new(req):
+    """新しい下書き。版は空でもよい。"""
+    body = await req.json()
+    obj = load(CHANGELOG, {"items": []})
+    nid = max([x["id"] for x in obj["items"]], default=0) + 1
+    obj["items"].append({"id": nid, "version": str(body.get("version", "")).strip(), "text": str(body.get("text", "")),
+                         "status": "draft", "at": now().isoformat(timespec="minutes")})
+    save(CHANGELOG, obj)
+    return web.json_response(obj)
+
+
+async def notes_put(req):
+    """下書きを書き換える。流した分は書き換えない。"""
+    body = await req.json()
+    obj = load(CHANGELOG, {"items": []})
+    x = find_note(obj, int(req.match_info["id"]))
+    if not x or x["status"] != "draft":
+        return web.json_response({"error": "下書きが見つからない（流した分は書き換えられない）"}, status=409)
+    x["version"], x["text"] = str(body.get("version", x["version"])).strip(), str(body.get("text", x["text"]))
+    save(CHANGELOG, obj)
+    return web.json_response(obj)
+
+
+async def notes_delete(req):
+    obj = load(CHANGELOG, {"items": []})
+    x = find_note(obj, int(req.match_info["id"]))
+    if x and x["status"] == "draft":
+        obj["items"].remove(x)
+        save(CHANGELOG, obj)
+    return web.json_response(obj)
+
+
+async def notes_post(req):
+    """Webhook に流す。同じ下書きを二度流さない（連打しても1回）。"""
+    async with post_lock:
+        obj = load(CHANGELOG, {"items": []})
+        x = find_note(obj, int(req.match_info["id"]))
+        if not x or x["status"] != "draft":
+            return web.json_response({"error": "流せる下書きが無い（もう流した？）"}, status=409)
+        try:
+            parts = await asyncio.get_running_loop().run_in_executor(None, changelog.post, x["text"])
+        except Exception as e:
+            return web.json_response({"error": f"流せなかった: {e}"}, status=502)
+        x.update(status="posted", posted_at=now().isoformat(timespec="minutes"), parts=parts)
+        save(CHANGELOG, obj)
+        print("お知らせを流した:", x["version"], len(x["text"].strip()), "字", flush=True)
+        return web.json_response(obj)
+
+
 async def index(_):
     return web.FileResponse(os.path.join(HERE, "web", "ui.html"))
 
@@ -255,7 +317,9 @@ def app():
     a = web.Application()
     a.add_routes([web.get("/", index), web.get("/api/state", state), web.get("/api/ratings", rating_list),
                   web.get("/api/log", log_tail), web.get("/api/info", info), web.get("/api/mechs", mechs), web.get("/api/topics", topics_get),
-                  web.get("/api/lessons", lessons_get), web.delete("/api/lessons/{id}", lessons_delete), web.put("/api/topics", topics_put)])
+                  web.get("/api/lessons", lessons_get), web.delete("/api/lessons/{id}", lessons_delete), web.put("/api/topics", topics_put),
+                  web.get("/api/notes", notes_get), web.post("/api/notes", notes_new), web.put("/api/notes/{id}", notes_put),
+                  web.delete("/api/notes/{id}", notes_delete), web.post("/api/notes/{id}/post", notes_post)])
     return a
 
 

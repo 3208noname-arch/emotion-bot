@@ -1,6 +1,6 @@
 """更新内容を Discord の Webhook に流す。本文は標準入力から受け取る。
 
-使い方（CT104）: python3 deploy/changelog.py < 本文.txt
+使い方（CT104）: python3 deploy/changelog.py < 本文.txt 。Web UI の「記録 → お知らせ」からも同じ post() で流す
 Webhook の URL は config.json の changelog_webhook（GitHub に入れない。URL を知っていれば誰でも投稿できるため）。
 **流す前に、本文をユーザーに確認してもらう**（2026-10-17 ユーザー「何を載せるかは適宜確認してから」）。
 """
@@ -24,19 +24,34 @@ def chunks(text):
     return out + [cur] if cur.strip() else out
 
 
-def main():
-    url = json.load(open(os.path.join(ROOT, "config.json"), encoding="utf-8")).get("changelog_webhook")
+def webhook_url():
+    return json.load(open(os.path.join(ROOT, "config.json"), encoding="utf-8")).get("changelog_webhook")
+
+
+def post(text, url=None):
+    """本文を流す。分けて送った数を返す。"""
+    url = url or webhook_url()
     if not url:
-        sys.exit("config.json に changelog_webhook が無い")
-    text = sys.stdin.read().strip()
+        raise RuntimeError("config.json に changelog_webhook が無い")
+    text = text.strip()
     if not text:
-        sys.exit("本文が空")
-    for part in chunks(text):
+        raise RuntimeError("本文が空")
+    parts = chunks(text)
+    for part in parts:
         body = json.dumps({"content": part, "allowed_mentions": {"parse": []}}).encode()
         req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json",
                                                               "User-Agent": "minato-changelog"})
         urllib.request.urlopen(req, timeout=15)
-    print("posted", len(text), "chars")
+    return len(parts)
+
+
+def main():
+    text = sys.stdin.read()
+    try:
+        post(text)
+    except RuntimeError as e:
+        sys.exit(str(e))
+    print("posted", len(text.strip()), "chars")
 
 
 if __name__ == "__main__":

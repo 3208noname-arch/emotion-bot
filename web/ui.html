@@ -94,6 +94,13 @@ h2:first-child{margin-top:4px}
 .summary div{font-size:13px;color:var(--mute)}
 .summary b{display:block;font-size:22px;color:var(--ink)}
 
+/* お知らせ */
+.note-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 12px}
+.note-card input,.note-card textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;color:inherit}
+.note-card textarea{min-height:16em;resize:vertical;line-height:1.6;margin-top:8px}
+.note-card .count{font-size:12px;color:var(--mute)}
+.items pre.posted{white-space:pre-wrap;font:inherit;margin:6px 0 0}
+
 /* 人 */
 details.person{border-bottom:1px solid var(--line)}
 details.person:first-of-type{border-top:1px solid var(--line)}
@@ -193,6 +200,13 @@ pre.log{white-space:pre-wrap;word-break:break-all;font:12px/1.55 ui-monospace,Me
   </div>
   <pre class="log" id="logBox"></pre>
 </section>
+<section class="view" id="v-notes">
+  <p class="lead">友達向けの更新のお知らせ（Discord の Webhook）。下書きを直して「流す」を押すと、すぐ流れます。流した分は直せません。</p>
+  <div id="noteList"></div>
+  <div class="btns"><button class="btn ghost" id="newNote" type="button">下書きを足す</button><span id="noteMsg" class="mute" role="status"></span></div>
+  <h2>流したもの</h2>
+  <ul class="items" id="postedList"></ul>
+</section>
 <section class="view" id="v-info">
   <h2>動いているもの</h2><ul class="rows" id="svc"></ul>
   <div id="linkCards"></div>
@@ -221,9 +235,9 @@ const GROUPS = [
   {id: "now", name: "いま", views: [["state", "様子"], ["mechs", "仕組み"]]},
   {id: "taste", name: "好き嫌い", views: [["topics", "話題"], ["lessons", "教わったこと"]]},
   {id: "people", name: "人", views: [["likes", "好感度"], ["anger", "怒り"], ["names", "呼び名"]]},
-  {id: "log", name: "記録", views: [["ratings", "評価"], ["log", "ログ"], ["info", "情報"]]},
+  {id: "log", name: "記録", views: [["ratings", "評価"], ["log", "ログ"], ["notes", "お知らせ"], ["info", "情報"]]},
 ];
-const LOAD = {mechs: loadMechs, lessons: loadLessons, ratings: loadRatings, log: loadLog, info: loadInfo};
+const LOAD = {mechs: loadMechs, lessons: loadLessons, ratings: loadRatings, log: loadLog, notes: loadNotes, info: loadInfo};
 let cur = {group: "now", view: "state"};
 const lastView = {};
 function render() {
@@ -355,6 +369,44 @@ function showLog() {
     .map(l => l.replace(/^\S+ \S+ python\[\d+\]: \S+ /, "")).reverse().join("\n") || "当てはまる行が無い";
 }
 $("#reloadLog").onclick = loadLog; $("#logFilter").oninput = showLog;
+
+// --- お知らせ ---
+const LIMIT = 2000;   // Discord の1メッセージの上限（超えると行の切れ目で分けて流す）
+const noteCount = t => { const n = t.trim().length; return `${n}字` + (n > LIMIT ? `（${Math.ceil(n / LIMIT)}通くらいに分かれる）` : ""); };
+function drawNotes(items) {
+  const drafts = items.filter(x => x.status === "draft"), posted = items.filter(x => x.status === "posted").reverse();
+  $("#noteList").innerHTML = drafts.length ? drafts.map(x => `<div class="note-card" data-note="${x.id}">
+    <input class="nv" value="${esc(x.version)}" placeholder="版（例: 0.15.2）" aria-label="版">
+    <textarea class="nt" aria-label="本文">${esc(x.text)}</textarea>
+    <div class="btns"><span class="count">${noteCount(x.text)}</span><span style="flex:1"></span>
+      <button class="btn ghost" type="button" data-act="del">消す</button>
+      <button class="btn ghost" type="button" data-act="save">保存</button>
+      <button class="btn" type="button" data-act="post">流す</button></div></div>`).join("") : `<p class="mute">下書きは無い。</p>`;
+  $("#postedList").innerHTML = posted.map(x => `<li>
+    <div class="head"><span class="chip">${esc(x.version || "版なし")}</span><span>${md16(x.posted_at)} に流した</span></div>
+    <pre class="posted">${esc(x.text)}</pre></li>`).join("") || none("まだ無い（Web UI から流した分だけが載ります）");
+}
+async function notesCall(url, method, body) {
+  const r = await fetch(url, {method, headers: {"Content-Type": "application/json"}, body: body && JSON.stringify(body)});
+  const d = await r.json();
+  if (!r.ok) { $("#noteMsg").textContent = d.error || "失敗した"; return null; }
+  drawNotes(d.items); return d;
+}
+async function loadNotes() { drawNotes((await (await fetch("api/notes")).json()).items); }
+$("#noteList").oninput = e => { const c = e.target.closest(".note-card"); if (c) c.querySelector(".count").textContent = noteCount(c.querySelector(".nt").value); };
+$("#noteList").onclick = async e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const c = b.closest(".note-card"), id = c.dataset.note, body = {version: c.querySelector(".nv").value, text: c.querySelector(".nt").value};
+  $("#noteMsg").textContent = "";
+  if (b.dataset.act === "del") { if (confirm("この下書きを消す？")) await notesCall("api/notes/" + id, "DELETE"); return; }
+  if (b.dataset.act === "save") { if (await notesCall("api/notes/" + id, "PUT", body)) $("#noteMsg").textContent = "保存した"; return; }
+  if (!body.text.trim()) { $("#noteMsg").textContent = "本文が空"; return; }
+  if (!confirm("この内容で Discord に流す？（取り消せません）")) return;
+  b.disabled = true;
+  if (await notesCall("api/notes/" + id, "PUT", body) && await notesCall("api/notes/" + id + "/post", "POST")) $("#noteMsg").textContent = "流した";
+  b.disabled = false;
+};
+$("#newNote").onclick = () => notesCall("api/notes", "POST", {version: "", text: ""});
 
 // --- 情報 ---
 async function loadInfo() {
